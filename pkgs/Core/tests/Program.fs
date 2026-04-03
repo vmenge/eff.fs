@@ -137,7 +137,84 @@ module Program =
                       |> Eff.runTask {| UserId = 0; Name = "Victor" |}
 
                   Expect.equal value (Ok 3) "should project UserId from env"
-              } ]
+              }
+
+              testTask "defer" {
+                  let mutable number = 0
+
+                  do!
+                      Eff.ofTask (fun () ->
+                          task {
+                              failwith "oh no!"
+                              return 5
+                          })
+                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 1))
+                      |> Eff.runTask ()
+
+                  Expect.equal number 1 "defer should have run"
+
+                  do!
+                      Eff.ofTask (fun () -> task { return Error(exn "oh no") })
+                      |> Eff.bind Eff.ofResult
+                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 2))
+                      |> Eff.runTask ()
+
+                  Expect.equal number 2 "defer should have run"
+
+                  do!
+                      Eff.ofTask (fun () -> task { return 5 })
+                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 3))
+                      |> Eff.runTask ()
+
+                  Expect.equal number 3 "defer should have run"
+              }
+
+              testTask "bracket releases after success" {
+                  let events = ResizeArray<string>()
+
+                  let acquire =
+                      Eff.thunk (fun () ->
+                          events.Add "acquire"
+                          42)
+
+                  let release resource =
+                      Eff.thunk (fun () -> events.Add $"release {resource}")
+
+                  let body resource =
+                      Eff.thunk (fun () ->
+                          events.Add $"use {resource}"
+                          resource + 1)
+
+                  let! result = Eff.bracket acquire release body |> Eff.runTask ()
+
+                  Expect.equal result (Ok 43) "should return use result"
+                  Expect.sequenceEqual events [ "acquire"; "use 42"; "release 42" ] "should run in order"
+              }
+
+              testTask "bracket releases after failure" {
+                  let events = ResizeArray<string>()
+
+                  let acquire =
+                      Eff.thunk (fun () ->
+                          events.Add "acquire"
+                          42)
+
+                  let release resource =
+                      Eff.thunk (fun () -> events.Add $"release {resource}")
+
+                  let body resource =
+                      Eff.thunk (fun () ->
+                          events.Add $"use {resource}"
+                          failwith "boom")
+
+                  let! result = Eff.bracket acquire release body |> Eff.runTask ()
+
+                  let err: exn = Result.error result
+                  Expect.equal err.Message "boom" "should return use error"
+                  Expect.sequenceEqual events [ "acquire"; "use 42"; "release 42" ] "should still release on failure"
+              }
+
+              ]
 
 
     [<EntryPoint>]

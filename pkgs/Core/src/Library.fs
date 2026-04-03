@@ -20,6 +20,7 @@ and private Pending<'t, 'env> =
     | BindRead of read: ('env -> obj) * cont: (obj -> Eff<'t, 'env>)
     | MapPending of source: Eff<obj, 'env> * map: (obj -> 't)
     | BindPending of source: Eff<obj, 'env> * cont: (obj -> Eff<'t, 'env>)
+    | Ensure of body: Eff<'t, 'env> * cleanup: Eff<unit, 'env>
 
 exception ValueIsNone
 
@@ -74,6 +75,7 @@ module Eff =
 
     let ofAsync async = Asy async
 
+
     let rec map f ef =
         match ef with
         | Pure v -> Pure(f v)
@@ -101,6 +103,7 @@ module Eff =
             | BindAsync(source, cont) -> Pending(BindAsync(source, fun x -> cont x |> map f))
             | BindRead(read, cont) -> Pending(BindRead(read, fun x -> cont x |> map f))
             | BindPending(source, cont) -> Pending(BindPending(source, fun x -> cont x |> map f))
+            | Ensure(body, cleanup) -> Pending(Ensure(map f body, cleanup))
 
 
     let rec bind f ef =
@@ -141,8 +144,14 @@ module Eff =
             | BindRead(read, cont) -> Pending(BindRead(read, fun x -> bind f (cont x)))
             | MapPending(source, mapper) -> Pending(BindPending(source, fun x -> mapper x |> f))
             | BindPending(source, cont) -> Pending(BindPending(source, fun x -> bind f (cont x)))
+            | Ensure(body, cleanup) -> Pending(Ensure(bind f body, cleanup))
 
-    let runTask (env: 'env) (eff: Eff<'t, 'env>) : Task<Result<'t, exn>> =
+    let ensuring cleanup body = Pending(Ensure(body, cleanup))
+
+    let bracket acquire release usefn =
+        acquire |> bind (fun resource -> usefn resource |> ensuring (release resource))
+
+    let rec private runLoop<'t, 'env> (env: 'env) (eff: Eff<'t, 'env>) : Task<Result<'t, exn>> =
         task {
             let mutable current = eff
             let mutable finished = false
@@ -215,6 +224,22 @@ module Eff =
                     | MapPending(source, mapf) -> current <- map mapf source
 
                     | BindPending(source, cont) -> current <- bind cont source
+                    | Ensure(body, cleanup) ->
+                        let! bodyResult = runLoop env body
+                        let! cleanupResult = runLoop env cleanup
+
+                        match cleanupResult with
+                        | Error e -> current <- Err e
+
+                        | Ok() ->
+                            match bodyResult with
+                            | Ok value -> current <- Pure value
+                            | Error e -> current <- Err e
 
             return result
         }
+
+    let runTask (env: 'env) (eff: Eff<'t, 'env>) : Task<Result<'t, exn>> = runLoop env eff
+
+    let runSync (env: 'env) (eff: Eff<'t, 'env>) : Result<'t, exn> =
+        runTask env eff |> _.GetAwaiter().GetResult()
