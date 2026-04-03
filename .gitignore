@@ -1,0 +1,19 @@
+.direnv/**
+bin/
+obj/
+.ionide/
+*.user
+*.suo
+.vs/
+result
+out/
+.worktrees/
+.workstreams/
+docs/plans
+
+# Test build artifacts
+tests/milestone/out/
+
+.tmp/
+.tmp-runtime/
+target/
