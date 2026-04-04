@@ -13,7 +13,7 @@ type Source<'env> =
 type Eff<'t, 'e, 'env> =
     | Pure of value: 't
     | Err of err: 'e
-    | Delay of delay: (unit -> Eff<'t, 'e, 'env>)
+    | Suspend of suspend: (unit -> Eff<'t, 'e, 'env>)
     | Thunk of thunk: (unit -> 't)
     | Task of tsk: (unit -> Task<'t>)
     | Read of read: ('env -> 't)
@@ -83,7 +83,7 @@ module Eff =
     let failw msg = Eff.Err(exn msg)
     let report o = Eff.Err(Report.make o)
     let reportw msg o = Eff.Err(Report.makewith msg o)
-    let delay f = Eff.Delay f
+    let suspend f = Eff.Suspend f
     let thunk f = Eff.Thunk f
 
     let ofResult (r: Result<'t, 'e>) =
@@ -133,7 +133,7 @@ module Eff =
         match ef with
         | Eff.Pure v -> Eff.Pure v
         | Eff.Err e -> Eff.Err(f e)
-        | Eff.Delay delay -> Eff.Delay(fun () -> mapErrObj f (delay ()))
+        | Eff.Suspend suspend -> Eff.Suspend(fun () -> mapErrObj f (suspend ()))
         | Eff.Thunk thunk -> Eff.Thunk thunk
         | Eff.Task tsk -> Eff.Task tsk
         | Eff.Read read -> Eff.Read read
@@ -159,7 +159,7 @@ module Eff =
         match ef with
         | Eff.Pure v -> Eff.Pure v
         | Eff.Err e -> Eff.Err(f e)
-        | Eff.Delay delay -> Eff.Delay(fun () -> mapErrUnit f (delay ()))
+        | Eff.Suspend suspend -> Eff.Suspend(fun () -> mapErrUnit f (suspend ()))
         | Eff.Thunk thunk -> Eff.Thunk thunk
         | Eff.Task tsk -> Eff.Task tsk
         | Eff.Read read -> Eff.Read read
@@ -182,7 +182,7 @@ module Eff =
         match ef with
         | Eff.Pure v -> Eff.Pure v
         | Eff.Err e -> Eff.Err(f e)
-        | Eff.Delay delay -> Eff.Delay(fun () -> mapErr f (delay ()))
+        | Eff.Suspend suspend -> Eff.Suspend(fun () -> mapErr f (suspend ()))
         | Eff.Thunk thunk -> Eff.Thunk thunk
         | Eff.Task tsk -> Eff.Task tsk
         | Eff.Read read -> Eff.Read read
@@ -205,7 +205,7 @@ module Eff =
         match ef with
         | Eff.Pure v -> Eff.Pure(f v)
         | Eff.Err err -> Eff.Err err
-        | Eff.Delay delay -> Eff.Delay(fun () -> map f (delay ()))
+        | Eff.Suspend suspend -> Eff.Suspend(fun () -> map f (suspend ()))
         | Eff.Thunk thunk -> Eff.Thunk(fun () -> f (thunk ()))
         | Eff.Task t ->
             Eff.Task(fun () -> task {
@@ -229,8 +229,8 @@ module Eff =
         match ef with
         | Eff.Pure v -> f v
         | Eff.Err err -> Eff.Err err
-        | Eff.Delay delay -> Eff.Delay(fun () -> bind f (delay ()))
-        | Eff.Thunk thunk -> Eff.Delay(fun () -> f (thunk ()))
+        | Eff.Suspend suspend -> Eff.Suspend(fun () -> bind f (suspend ()))
+        | Eff.Thunk thunk -> Eff.Suspend(fun () -> f (thunk ()))
 
         | Eff.Task tsk ->
             let source =
@@ -258,7 +258,7 @@ module Eff =
     let defer cleanup body = Eff.Pending(Defer(body, cleanup))
 
     let tryCatch (f: unit -> 't) : Eff<'t, exn, 'env> =
-        Eff.Delay(fun () ->
+        Eff.Suspend(fun () ->
             try
                 Eff.Pure(f ())
             with e ->
@@ -308,9 +308,9 @@ module Eff =
                     result <- Exit.Err err
                     finished <- true
 
-                | Eff.Delay delay ->
+                | Eff.Suspend suspend ->
                     try
-                        current <- delay ()
+                        current <- suspend ()
                     with e ->
                         result <- Exit.Exn e
                         finished <- true
@@ -403,7 +403,7 @@ module CE =
         member _.Zero() : Eff<unit, 'e, 'env> = Eff.value ()
 
         member _.Delay(f: unit -> Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> =
-            Eff.delay f
+            Eff.suspend f
 
         member _.Combine
             (left: Eff<unit, 'e, 'env>, right: Eff<'t, 'e, 'env>)
@@ -429,14 +429,14 @@ module CE =
         member _.For
             (sequence: seq<'t>, body: 't -> Eff<unit, 'e, 'env>)
             : Eff<unit, 'e, 'env> =
-            Eff.delay (fun () ->
+            Eff.suspend (fun () ->
                 let enumerator = sequence.GetEnumerator()
 
                 let cleanup =
                     Eff.thunk (fun () -> enumerator.Dispose())
 
                 let rec loop () =
-                    Eff.delay (fun () ->
+                    Eff.suspend (fun () ->
                         if enumerator.MoveNext() then
                             Eff.bind (fun () -> loop ()) (body enumerator.Current)
                         else

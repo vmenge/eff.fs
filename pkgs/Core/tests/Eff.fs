@@ -19,7 +19,7 @@ module Eff =
 
             testTask "mapErr maps delayed errors" {
                 let! value =
-                    Eff.delay (fun () -> Eff.err "boom")
+                    Eff.suspend (fun () -> Eff.err "boom")
                     |> Eff.mapErr exn
                     |> Eff.runTask ()
 
@@ -56,8 +56,8 @@ module Eff =
                     "should map captured exceptions"
             }
 
-            testTask "Delay resolves" {
-                let! value = Eff.delay (fun () -> Eff.value 5) |> Eff.runTask ()
+            testTask "Suspend resolves" {
+                let! value = Eff.suspend (fun () -> Eff.value 5) |> Eff.runTask ()
                 Expect.equal value (Exit.Ok 5) "should be equal"
             }
 
