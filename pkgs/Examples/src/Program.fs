@@ -3,17 +3,17 @@
 let readFile filename : Eff<string, exn, _> = Eff.value "file contents"
 
 let parseFile fileContents : Result<{| name: string |}, string> =
-    Ok {| name = "bla" |}
+  Ok {| name = "bla" |}
 
 let x () = eff {
-    let! contents = readFile "bla"
-    let! parsed = parseFile contents |> Result.mapError exn
+  let! contents = readFile "bla"
+  let! parsed = parseFile contents |> Result.mapError exn
 
-    printfn $"{parsed}"
+  printfn $"{parsed}"
 
-    ()
+  ()
 }
 
 let y () =
-    readFile "bla"
-    |> Eff.bind (fun contents -> contents |> parseFile |> Eff.ofResultWith exn)
+  readFile "bla"
+  |> Eff.bind (fun contents -> contents |> parseFile |> Eff.ofResultWith exn)

@@ -1,8 +1,11 @@
 ﻿namespace EffFs.Core.Tests
 
 module Program =
-    open Expecto
+  open Expecto
 
-    [<EntryPoint>]
-    let main argv =
-        runTestsWithCLIArgs [] argv (testList "all" [ Eff.tests; CE.tests; ReportCE.tests ])
+  [<EntryPoint>]
+  let main argv =
+    runTestsWithCLIArgs
+      []
+      argv
+      (testList "all" [ Eff.tests; CE.tests; ReportCE.tests ])
