@@ -156,10 +156,10 @@ module Eff =
             | BindPending(source, cont) -> Eff.Pending(BindPending(source, fun x -> bind f (cont x)))
             | Ensure(body, cleanup) -> Eff.Pending(Ensure(bind f body, cleanup))
 
-    let ensuring cleanup body = Eff.Pending(Ensure(body, cleanup))
+    let defer cleanup body = Eff.Pending(Ensure(body, cleanup))
 
     let bracket acquire release usefn =
-        acquire |> bind (fun resource -> usefn resource |> ensuring (release resource))
+        acquire |> bind (fun resource -> usefn resource |> defer (release resource))
 
     let rec private runLoop<'t, 'env> (env: 'env) (eff: Eff<'t, 'env>) : Task<Result<'t, exn>> =
         task {
@@ -277,7 +277,7 @@ module CE =
             Eff.delay body |> Eff.catch handler
 
         member _.TryFinally(body: Eff<'t, 'env>, compensation: unit -> unit) : Eff<'t, 'env> =
-            Eff.ensuring (Eff.thunk compensation) body
+            Eff.defer (Eff.thunk compensation) body
 
         member _.Using(resource: 'r, binder: 'r -> Eff<'t, 'env>) : Eff<'t, 'env> when 'r :> System.IDisposable =
             Eff.bracket (Eff.value resource) (fun r -> Eff.thunk (fun () -> r.Dispose())) binder
@@ -302,12 +302,12 @@ module CE =
         [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
         member _.Defer(state: Eff<'t, 'env>, [<ProjectionParameter>] cleanup: 't -> Eff<unit, 'env>) : Eff<'t, 'env> =
             state
-            |> Eff.bind (fun vspace -> Eff.ensuring (cleanup vspace) (Eff.value vspace))
+            |> Eff.bind (fun vspace -> Eff.defer (cleanup vspace) (Eff.value vspace))
 
         [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
         member _.Defer(state: Eff<'t, 'env>, [<ProjectionParameter>] cleanup: 't -> unit -> unit) : Eff<'t, 'env> =
             state
-            |> Eff.bind (fun vspace -> Eff.ensuring (Eff.thunk (cleanup vspace)) (Eff.value vspace))
+            |> Eff.bind (fun vspace -> Eff.defer (Eff.thunk (cleanup vspace)) (Eff.value vspace))
 
         member _.Source(eff: Eff<'t, 'env>) : Eff<'t, 'env> = eff
 

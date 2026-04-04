@@ -247,13 +247,14 @@ module CE =
                   let! value =
                       eff {
                           let! x = Eff.value 41
-                          defer (fun () -> seen <- x)
+                          defer (Eff.thunk (fun () -> seen <- seen + x))
+                          defer (fun () -> seen <- seen + x)
                           return x + 1
                       }
                       |> Eff.runTask ()
 
                   Expect.equal value (Ok 42) "should return the body result"
-                  Expect.equal seen 41 "defer should capture the bound value"
+                  Expect.equal seen 82 "defer should capture the bound value"
               }
 
               testTask "multiple defers still run on failure" {

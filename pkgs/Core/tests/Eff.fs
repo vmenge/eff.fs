@@ -134,7 +134,7 @@ module Eff =
                               failwith "oh no!"
                               return 5
                           })
-                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 1))
+                      |> Eff.defer (Eff.thunk (fun () -> number <- 1))
                       |> Eff.runTask ()
 
                   Expect.equal number 1 "defer should have run"
@@ -142,14 +142,14 @@ module Eff =
                   do!
                       Eff.ofTask (fun () -> task { return Error(exn "oh no") })
                       |> Eff.bind Eff.ofResult
-                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 2))
+                      |> Eff.defer (Eff.thunk (fun () -> number <- 2))
                       |> Eff.runTask ()
 
                   Expect.equal number 2 "defer should have run"
 
                   do!
                       Eff.ofTask (fun () -> task { return 5 })
-                      |> Eff.ensuring (Eff.thunk (fun () -> number <- 3))
+                      |> Eff.defer (Eff.thunk (fun () -> number <- 3))
                       |> Eff.runTask ()
 
                   Expect.equal number 3 "defer should have run"
