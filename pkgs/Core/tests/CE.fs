@@ -181,6 +181,97 @@ module CE =
                   Expect.isTrue probe.Disposed "use! should dispose the resource"
               }
 
+              testTask "defer runs on success" {
+                  let mutable cleaned = false
+
+                  let! value =
+                      eff {
+                          defer (Eff.thunk (fun () -> cleaned <- true))
+                          return 1
+                      }
+                      |> Eff.runTask ()
+
+                  Expect.equal value (Ok 1) "should return the body result"
+                  Expect.isTrue cleaned "defer should run on success"
+              }
+
+              testTask "defer runs on failure" {
+                  let mutable cleaned = false
+
+                  let! value =
+                      eff {
+                          defer (Eff.thunk (fun () -> cleaned <- true))
+                          return! Eff.errwith "boom"
+                      }
+                      |> Eff.runTask ()
+
+                  let err: exn = Result.error value
+                  Expect.equal err.Message "boom" "should preserve the body error"
+                  Expect.isTrue cleaned "defer should run on failure"
+              }
+
+              testTask "defer runs in LIFO order" {
+                  let events = ResizeArray<string>()
+
+                  let! value =
+                      eff {
+                          defer (Eff.thunk (fun () -> events.Add "outer"))
+                          defer (Eff.thunk (fun () -> events.Add "inner"))
+                          return 1
+                      }
+                      |> Eff.runTask ()
+
+                  Expect.equal value (Ok 1) "should return the body result"
+                  Expect.sequenceEqual events [ "inner"; "outer" ] "defer should run in LIFO order"
+              }
+
+              testTask "defer captures prior locals" {
+                  let mutable seen = 0
+
+                  let! value =
+                      eff {
+                          let x = 41
+                          defer (fun () -> seen <- x)
+                          let! y = Eff.value 1
+                          return x + y
+                      }
+                      |> Eff.runTask ()
+
+                  Expect.equal value (Ok 42) "should return the body result"
+                  Expect.equal seen 41 "defer should capture the local value"
+              }
+
+              testTask "defer after let! can use bound value" {
+                  let mutable seen = 0
+
+                  let! value =
+                      eff {
+                          let! x = Eff.value 41
+                          defer (fun () -> seen <- x)
+                          return x + 1
+                      }
+                      |> Eff.runTask ()
+
+                  Expect.equal value (Ok 42) "should return the body result"
+                  Expect.equal seen 41 "defer should capture the bound value"
+              }
+
+              testTask "multiple defers still run on failure" {
+                  let events = ResizeArray<string>()
+
+                  let! value =
+                      eff {
+                          defer (Eff.thunk (fun () -> events.Add "outer"))
+                          defer (Eff.thunk (fun () -> events.Add "inner"))
+                          return! Eff.errwith "boom"
+                      }
+                      |> Eff.runTask ()
+
+                  let err: exn = Result.error value
+                  Expect.equal err.Message "boom" "should preserve the body error"
+                  Expect.sequenceEqual events [ "inner"; "outer" ] "all defers should run in LIFO order"
+              }
+
               testTask "dep injection" {
                   let value () =
                       eff {

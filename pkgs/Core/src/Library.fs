@@ -257,6 +257,8 @@ module Eff =
 [<AutoOpen>]
 module CE =
     type EffBuilder() =
+        member _.Yield(value: 't) : Eff<'t, 'env> = Eff.value value
+
         member _.Return(value: 't) : Eff<'t, 'env> = Eff.value value
 
         member _.ReturnFrom(eff: Eff<'t, 'env>) : Eff<'t, 'env> = eff
@@ -296,6 +298,16 @@ module CE =
                     Eff.value ()
 
             loop ()
+
+        [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
+        member _.Defer(state: Eff<'t, 'env>, [<ProjectionParameter>] cleanup: 't -> Eff<unit, 'env>) : Eff<'t, 'env> =
+            state
+            |> Eff.bind (fun vspace -> Eff.ensuring (cleanup vspace) (Eff.value vspace))
+
+        [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
+        member _.Defer(state: Eff<'t, 'env>, [<ProjectionParameter>] cleanup: 't -> unit -> unit) : Eff<'t, 'env> =
+            state
+            |> Eff.bind (fun vspace -> Eff.ensuring (Eff.thunk (cleanup vspace)) (Eff.value vspace))
 
         member _.Source(eff: Eff<'t, 'env>) : Eff<'t, 'env> = eff
 
