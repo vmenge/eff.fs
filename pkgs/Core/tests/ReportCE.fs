@@ -30,7 +30,7 @@ module ReportCE =
                 Expect.equal err.Message "boom" "report message should come from the original error"
 
                 match err with
-                |ReportAs (wrapped: string) ->
+                | ReportAs (wrapped: string) ->
                     Expect.equal wrapped "boom" "report should preserve the original error payload"
                 | _ ->
                     failtest "expected Report carrying the original string"
@@ -48,7 +48,7 @@ module ReportCE =
                 Expect.equal (err.GetType()) typeof<Report> "return! should normalize Eff errors"
 
                 match err with
-                | Report.ReportAs (wrapped: string) ->
+                | ReportAs (wrapped: string) ->
                     Expect.equal wrapped "boom" "report should preserve the original error payload"
                 | _ ->
                     failtest "expected Report carrying the original string"
@@ -67,7 +67,7 @@ module ReportCE =
                 Expect.equal (err.GetType()) typeof<Report> "result errors should normalize to Report"
 
                 match err with
-                | Report.ReportAs (wrapped: string) ->
+                | ReportAs (wrapped: string) ->
                     Expect.equal wrapped "boom" "report should preserve the original result error"
                 | _ ->
                     failtest "expected Report carrying the original string"
@@ -90,10 +90,51 @@ module ReportCE =
                 Expect.equal (err.GetType()) typeof<Report> "task result errors should normalize to Report"
 
                 match err with
-                | Report.ReportAs (wrapped: string) ->
+                | ReportAs (wrapped: string) ->
                     Expect.equal wrapped "boom" "report should preserve the original task result error"
                 | _ ->
                     failtest "expected Report carrying the original string"
+            }
+
+            testTask "mixed let! chain normalizes later Eff errors to Report" {
+                let! value =
+                    eff {
+                        let! x = Ok 1
+                        let! y =
+                            if x = 1 then
+                                Eff.err "boom"
+                            else
+                                Eff.value 2
+                        return y
+                    }
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+
+                Expect.equal (err.GetType()) typeof<Report> "later Eff errors should still normalize to Report"
+
+                match err with
+                | ReportAs (wrapped: string) ->
+                    Expect.equal wrapped "boom" "report should preserve the later Eff error payload"
+                | _ ->
+                    failtest "expected Report carrying the original string"
+            }
+
+            testTask "mixed successful chain stays in the report CE" {
+                let taskResult () : Task<Result<int, string>> = task {
+                    return Ok 2
+                }
+
+                let! value =
+                    eff {
+                        let! x = Ok 1
+                        let! y = taskResult ()
+                        let! z = Eff.value 3
+                        return x + y + z
+                    }
+                    |> Eff.runTask ()
+
+                Expect.equal value (Exit.Ok 6) "mixed successful sources should compose"
             }
 
             testTask "option none stays a single Report" {
@@ -109,7 +150,7 @@ module ReportCE =
                 Expect.equal (err.GetType()) typeof<Report> "option none should surface as Report"
 
                 match err with
-                | Report.ReportAs (wrapped: Option<int>) ->
+                | ReportAs (wrapped: Option<int>) ->
                     Expect.equal wrapped None "report should preserve the original option payload"
                 | _ ->
                     failtest "expected Report carrying None"

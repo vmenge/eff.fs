@@ -18,6 +18,8 @@ module Report =
         | :? exn as x -> Report(o, x.Message, x)
         | _ -> Report(o, $"{o}") :> exn
 
+[<AutoOpen>]
+module ActivePattern =
     let (|ReportAs|_|) (ex: exn) : 'a option =
         match ex with
         | :? Report as report ->
