@@ -108,10 +108,68 @@ module Eff =
 
     let ofAsync async = Eff.Task(fun () -> async () |> Async.StartAsTask)
 
-    let mapErr f ef =
+    let rec private mapErrObj
+        (f: 'e1 -> 'e2)
+        (ef: Eff<obj, 'e1, 'env>)
+        : Eff<obj, 'e2, 'env> =
         match ef with
+        | Eff.Pure v -> Eff.Pure v
         | Eff.Err e -> Eff.Err(f e)
-        | _ -> ef
+        | Eff.Delay delay -> Eff.Delay(fun () -> mapErrObj f (delay ()))
+        | Eff.Thunk thunk -> Eff.Thunk thunk
+        | Eff.Task tsk -> Eff.Task tsk
+        | Eff.Read read -> Eff.Read read
+        | Eff.Pending pending ->
+            match pending with
+            | Map(source, mapper) ->
+                Eff.Pending(Map(mapErrObj f source, mapper))
+            | FlatMap(source, cont) ->
+                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErrObj f (cont x)))
+            | FlatMapSource(source, cont) ->
+                Eff.Pending(FlatMapSource(source, fun x -> mapErrObj f (cont x)))
+            | Defer(body, cleanup) ->
+                Eff.Pending(Defer(mapErrObj f body, mapErrUnit f cleanup))
+
+    and private mapErrUnit
+        (f: 'e1 -> 'e2)
+        (ef: Eff<unit, 'e1, 'env>)
+        : Eff<unit, 'e2, 'env> =
+        match ef with
+        | Eff.Pure v -> Eff.Pure v
+        | Eff.Err e -> Eff.Err(f e)
+        | Eff.Delay delay -> Eff.Delay(fun () -> mapErrUnit f (delay ()))
+        | Eff.Thunk thunk -> Eff.Thunk thunk
+        | Eff.Task tsk -> Eff.Task tsk
+        | Eff.Read read -> Eff.Read read
+        | Eff.Pending pending ->
+            match pending with
+            | Map(source, mapper) ->
+                Eff.Pending(Map(mapErrObj f source, mapper))
+            | FlatMap(source, cont) ->
+                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErrUnit f (cont x)))
+            | FlatMapSource(source, cont) ->
+                Eff.Pending(FlatMapSource(source, fun x -> mapErrUnit f (cont x)))
+            | Defer(body, cleanup) ->
+                Eff.Pending(Defer(mapErrUnit f body, mapErrUnit f cleanup))
+
+    and mapErr (f: 'e1 -> 'e2) (ef: Eff<'t, 'e1, 'env>) : Eff<'t, 'e2, 'env> =
+        match ef with
+        | Eff.Pure v -> Eff.Pure v
+        | Eff.Err e -> Eff.Err(f e)
+        | Eff.Delay delay -> Eff.Delay(fun () -> mapErr f (delay ()))
+        | Eff.Thunk thunk -> Eff.Thunk thunk
+        | Eff.Task tsk -> Eff.Task tsk
+        | Eff.Read read -> Eff.Read read
+        | Eff.Pending pending ->
+            match pending with
+            | Map(source, mapper) ->
+                Eff.Pending(Map(mapErrObj f source, mapper))
+            | FlatMap(source, cont) ->
+                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErr f (cont x)))
+            | FlatMapSource(source, cont) ->
+                Eff.Pending(FlatMapSource(source, fun x -> mapErr f (cont x)))
+            | Defer(body, cleanup) ->
+                Eff.Pending(Defer(mapErr f body, mapErrUnit f cleanup))
 
     let rec map f ef =
         match ef with

@@ -17,6 +17,37 @@ module Eff =
                 Expect.equal value (Exit.Err "oh no") "should be equal"
             }
 
+            testTask "mapErr maps delayed errors" {
+                let! value =
+                    Eff.delay (fun () -> Eff.err "boom")
+                    |> Eff.mapErr exn
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should map delayed Err values"
+            }
+
+            testTask "mapErr maps bound errors" {
+                let! value =
+                    Eff.value 1
+                    |> Eff.bind (fun _ -> Eff.err "boom")
+                    |> Eff.mapErr exn
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should map Err values after bind"
+            }
+
+            testTask "mapErr maps captured exceptions" {
+                let! value =
+                    Eff.tryCatch (fun () -> failwith "boom")
+                    |> Eff.mapErr (fun e -> exn ($"wrapped: {e.Message}"))
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "wrapped: boom" "should map captured exceptions"
+            }
+
             testTask "Delay resolves" {
                 let! value = Eff.delay (fun () -> Eff.value 5) |> Eff.runTask ()
                 Expect.equal value (Exit.Ok 5) "should be equal"
