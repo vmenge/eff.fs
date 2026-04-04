@@ -2,6 +2,12 @@
 
 open System.Threading.Tasks
 
+[<RequireQualifiedAccess>]
+type Source<'env> =
+    private
+    | Task of (unit -> Task<obj>)
+    | Read of ('env -> obj)
+
 [<Struct>]
 [<RequireQualifiedAccess>]
 type Eff<'t, 'e, 'env> =
@@ -15,13 +21,10 @@ type Eff<'t, 'e, 'env> =
 
 and Pending<'t, 'e, 'env> =
     private
-    | BindTask of source: (unit -> Task<obj>) * cont: (obj -> Eff<'t, 'e, 'env>)
-    | BindRead of read: ('env -> obj) * cont: (obj -> Eff<'t, 'e, 'env>)
-    | MapPending of source: Eff<obj, 'e, 'env> * map: (obj -> 't)
-    | BindPending of
-        source: Eff<obj, 'e, 'env> *
-        cont: (obj -> Eff<'t, 'e, 'env>)
-    | Ensure of body: Eff<'t, 'e, 'env> * cleanup: Eff<unit, 'e, 'env>
+    | Map of source: Eff<obj, 'e, 'env> * map: (obj -> 't)
+    | FlatMap of source: Eff<obj, 'e, 'env> * cont: (obj -> Eff<'t, 'e, 'env>)
+    | FlatMapSource of source: Source<'env> * cont: (obj -> Eff<'t, 'e, 'env>)
+    | Defer of body: Eff<'t, 'e, 'env> * cleanup: Eff<unit, 'e, 'env>
     | Catch of body: Eff<'t, 'e, 'env> * handler: (exn -> Eff<'t, 'e, 'env>)
 
 [<RequireQualifiedAccess>]
@@ -128,15 +131,13 @@ module Eff =
         | Eff.Read read -> Eff.Read(fun env -> f (read env))
         | Eff.Pending pending ->
             match pending with
-            | MapPending(source, mapper) ->
-                Eff.Pending(MapPending(source, fun x -> f (mapper x)))
-            | BindTask(source, cont) ->
-                Eff.Pending(BindTask(source, fun x -> cont x |> map f))
-            | BindRead(read, cont) ->
-                Eff.Pending(BindRead(read, fun x -> cont x |> map f))
-            | BindPending(source, cont) ->
-                Eff.Pending(BindPending(source, fun x -> cont x |> map f))
-            | Ensure(body, cleanup) -> Eff.Pending(Ensure(map f body, cleanup))
+            | Map(source, mapper) ->
+                Eff.Pending(Map(source, fun x -> f (mapper x)))
+            | FlatMap(source, cont) ->
+                Eff.Pending(FlatMap(source, fun x -> cont x |> map f))
+            | FlatMapSource(source, cont) ->
+                Eff.Pending(FlatMapSource(source, fun x -> cont x |> map f))
+            | Defer(body, cleanup) -> Eff.Pending(Defer(map f body, cleanup))
             | Catch(body, handler) ->
                 Eff.Pending(Catch(map f body, handler >> map f))
 
@@ -150,37 +151,30 @@ module Eff =
 
         | Eff.Task tsk ->
             let source =
-                fun () -> task {
+                Source.Task(fun () -> task {
                     let! x = tsk ()
                     return box x
-                }
+                })
 
-            let cont = (fun x -> f (unbox x))
-            Eff.Pending(BindTask(source, cont))
+            Eff.Pending(FlatMapSource(source, fun x -> f (unbox x)))
 
         | Eff.Read read ->
-            Eff.Pending(
-                BindRead(
-                    (fun env -> box (read env)),
-                    (fun x -> f (unbox<'t> x))
-                )
-            )
+            let source = Source.Read(fun env -> box (read env))
+            Eff.Pending(FlatMapSource(source, fun x -> f (unbox<'t> x)))
 
         | Eff.Pending pending ->
             match pending with
-            | BindTask(source, cont) ->
-                Eff.Pending(BindTask(source, fun x -> bind f (cont x)))
-            | BindRead(read, cont) ->
-                Eff.Pending(BindRead(read, fun x -> bind f (cont x)))
-            | MapPending(source, mapper) ->
-                Eff.Pending(BindPending(source, fun x -> mapper x |> f))
-            | BindPending(source, cont) ->
-                Eff.Pending(BindPending(source, fun x -> bind f (cont x)))
-            | Ensure(body, cleanup) -> Eff.Pending(Ensure(bind f body, cleanup))
+            | Map(source, mapper) ->
+                Eff.Pending(FlatMap(source, fun x -> mapper x |> f))
+            | FlatMap(source, cont) ->
+                Eff.Pending(FlatMap(source, fun x -> bind f (cont x)))
+            | FlatMapSource(source, cont) ->
+                Eff.Pending(FlatMapSource(source, fun x -> bind f (cont x)))
+            | Defer(body, cleanup) -> Eff.Pending(Defer(bind f body, cleanup))
             | Catch(body, handler) ->
                 Eff.Pending(Catch(bind f body, handler >> bind f))
 
-    let defer cleanup body = Eff.Pending(Ensure(body, cleanup))
+    let defer cleanup body = Eff.Pending(Defer(body, cleanup))
 
     let bracket acquire release usefn =
         acquire
@@ -236,26 +230,22 @@ module Eff =
 
                 | Eff.Pending pending ->
                     match pending with
-                    | BindTask(source, cont) ->
+                    | FlatMapSource(source, cont) ->
                         try
-                            let! x = source ()
-                            current <- cont x
+                            match source with
+                            | Source.Task source ->
+                                let! x = source ()
+                                current <- cont x
+                            | Source.Read read -> current <- cont (read env)
                         with e ->
                             result <- Exit.Exn e
                             finished <- true
 
-                    | BindRead(read, cont) ->
-                        try
-                            current <- cont (read env)
-                        with e ->
-                            result <- Exit.Exn e
-                            finished <- true
+                    | Map(source, mapf) -> current <- map mapf source
 
-                    | MapPending(source, mapf) -> current <- map mapf source
+                    | FlatMap(source, cont) -> current <- bind cont source
 
-                    | BindPending(source, cont) -> current <- bind cont source
-
-                    | Ensure(body, cleanup) ->
+                    | Defer(body, cleanup) ->
                         let! bodyResult = runLoop env body
                         let! cleanupResult = runLoop env cleanup
 
