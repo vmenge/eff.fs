@@ -6,7 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Library.fs" />
+    <Compile Include="Report.fs" />
+    <Compile Include="Eff.fs" />
+    <Compile Include="CE.fs" />
+    <Compile Include="ReportCE.fs" />
   </ItemGroup>
 
   <ItemGroup>

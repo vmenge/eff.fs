@@ -5,8 +5,9 @@ module CE =
     open System.Collections
     open System.Collections.Generic
     open Expecto
-    open EffFs.Core
     open System.Threading.Tasks
+    open EffFs.Core
+    open EffFs.Core.CE
 
     type ForProbe(items: int list) =
         let items = List.toArray items

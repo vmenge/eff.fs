@@ -5,4 +5,4 @@ module Program =
 
     [<EntryPoint>]
     let main argv =
-        runTestsWithCLIArgs [] argv (testList "all" [ Eff.tests; CE.tests ])
+        runTestsWithCLIArgs [] argv (testList "all" [ Eff.tests; CE.tests; ReportCE.tests ])
