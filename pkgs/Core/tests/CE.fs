@@ -55,7 +55,7 @@ module CE =
                         let! h = async { return Ok 8 }
                         let! i = ValueSome 9
                         let! j = ValueTask<int>(10)
-                        let! k = ValueTask<Result<int, exn>>(Ok 11)
+                        let! k = ValueTask<Result<int, _>>(Ok 11)
 
                         let result = a + b + c + d + e + f + g + h + i + j + k
 
@@ -108,7 +108,7 @@ module CE =
 
                 Expect.equal
                     (err.GetType())
-                    typeof<ValueIsNone>
+                    typeof<Report>
                     "should return ValueIsNone"
 
                 Expect.isFalse ran "later CE code should not run"
@@ -146,7 +146,11 @@ module CE =
                     |> Eff.runTask ()
 
                 let err: exn = Exit.ex value
-                Expect.equal err.Message "boom" "should resolve thrown exceptions as defects"
+
+                Expect.equal
+                    err.Message
+                    "boom"
+                    "should resolve thrown exceptions as defects"
             }
 
             testTask "tryCatch inside CE returns Err and short-circuits" {
@@ -161,7 +165,12 @@ module CE =
                     |> Eff.runTask ()
 
                 let err: exn = Exit.err value
-                Expect.equal err.Message "boom" "should return the captured exception as Err"
+
+                Expect.equal
+                    err.Message
+                    "boom"
+                    "should return the captured exception as Err"
+
                 Expect.isFalse ran "later CE code should not run"
             }
 

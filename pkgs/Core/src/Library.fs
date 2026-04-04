@@ -56,7 +56,23 @@ module Exit =
         | Exit.Err e -> failwith $"{e}"
         | Exit.Exn e -> e
 
-exception ValueIsNone
+type Report(o: obj, msg: string) =
+    inherit System.Exception(msg)
+
+    member _.Err = o
+
+module Report =
+    let makewith msg o = Report(o, msg) :> exn
+    let make o = Report(o, $"{o}") :> exn
+
+    let (|ReportAs|_|) (ex: exn) : 'a option =
+        match ex with
+        | :? Report as report ->
+            match report.Err with
+            | :? 'a as value -> Some value
+            | _ -> None
+        | _ -> None
+
 
 module Eff =
     type t<'t> = Eff<'t, unit, unit>
@@ -64,7 +80,9 @@ module Eff =
     let inline read (f: 'a -> 'b) : Eff<'b, 'e, 'a> = Eff.Read f
     let value t = Eff.Pure t
     let err e = Eff.Err e
-    let errwith msg = Eff.Err(msg)
+    let failw msg = Eff.Err(exn msg)
+    let report o = Eff.Err(Report.make o)
+    let reportw msg o = Eff.Err(Report.makewith msg o)
     let delay f = Eff.Delay f
     let thunk f = Eff.Thunk f
 
@@ -81,7 +99,7 @@ module Eff =
     let ofOption o =
         match o with
         | Some v -> Eff.Pure v
-        | None -> Eff.Err(ValueIsNone)
+        | None -> report None
 
     let ofOptionWith f o =
         match o with
@@ -91,7 +109,7 @@ module Eff =
     let ofValueOption o =
         match o with
         | ValueSome v -> Eff.Pure v
-        | ValueNone -> Eff.Err(ValueIsNone)
+        | ValueNone -> report ValueNone
 
     let ofValueOptionWith f o =
         match o with
@@ -124,9 +142,13 @@ module Eff =
             | Map(source, mapper) ->
                 Eff.Pending(Map(mapErrObj f source, mapper))
             | FlatMap(source, cont) ->
-                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErrObj f (cont x)))
+                Eff.Pending(
+                    FlatMap(mapErrObj f source, fun x -> mapErrObj f (cont x))
+                )
             | FlatMapSource(source, cont) ->
-                Eff.Pending(FlatMapSource(source, fun x -> mapErrObj f (cont x)))
+                Eff.Pending(
+                    FlatMapSource(source, fun x -> mapErrObj f (cont x))
+                )
             | Defer(body, cleanup) ->
                 Eff.Pending(Defer(mapErrObj f body, mapErrUnit f cleanup))
 
@@ -146,9 +168,13 @@ module Eff =
             | Map(source, mapper) ->
                 Eff.Pending(Map(mapErrObj f source, mapper))
             | FlatMap(source, cont) ->
-                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErrUnit f (cont x)))
+                Eff.Pending(
+                    FlatMap(mapErrObj f source, fun x -> mapErrUnit f (cont x))
+                )
             | FlatMapSource(source, cont) ->
-                Eff.Pending(FlatMapSource(source, fun x -> mapErrUnit f (cont x)))
+                Eff.Pending(
+                    FlatMapSource(source, fun x -> mapErrUnit f (cont x))
+                )
             | Defer(body, cleanup) ->
                 Eff.Pending(Defer(mapErrUnit f body, mapErrUnit f cleanup))
 
@@ -165,11 +191,15 @@ module Eff =
             | Map(source, mapper) ->
                 Eff.Pending(Map(mapErrObj f source, mapper))
             | FlatMap(source, cont) ->
-                Eff.Pending(FlatMap(mapErrObj f source, fun x -> mapErr f (cont x)))
+                Eff.Pending(
+                    FlatMap(mapErrObj f source, fun x -> mapErr f (cont x))
+                )
             | FlatMapSource(source, cont) ->
                 Eff.Pending(FlatMapSource(source, fun x -> mapErr f (cont x)))
             | Defer(body, cleanup) ->
                 Eff.Pending(Defer(mapErr f body, mapErrUnit f cleanup))
+
+    let toReport (e: Eff<_, 'e, _>) : Eff<_, exn, _> = e |> mapErr Report.make
 
     let rec map f ef =
         match ef with
