@@ -2,9 +2,47 @@ namespace EffFs.Core.Tests
 
 module CE =
     open System
+    open System.Collections
+    open System.Collections.Generic
     open Expecto
     open EffFs.Core
     open System.Threading.Tasks
+
+    type ForProbe(items: int list) =
+        let items = List.toArray items
+        let mutable disposed = false
+
+        let newEnumerator () =
+            let mutable index = -1
+
+            { new IEnumerator<int> with
+                member _.Current = items.[index]
+
+              interface IEnumerator with
+                member _.Current = box items.[index]
+
+                member _.MoveNext() =
+                    if disposed then failwith "disposed"
+
+                    if index + 1 < items.Length then
+                        index <- index + 1
+                        true
+                    else
+                        false
+
+                member _.Reset() = index <- -1
+
+              interface IDisposable with
+                member _.Dispose() = disposed <- true }
+
+        member _.Disposed = disposed
+
+        member _.Sequence : seq<int> =
+            { new IEnumerable<int> with
+                member _.GetEnumerator() = newEnumerator ()
+
+              interface IEnumerable with
+                member _.GetEnumerator() = newEnumerator () :> IEnumerator }
 
     type DisposeProbe() =
         let mutable disposed = false
@@ -284,6 +322,55 @@ module CE =
 
                 Expect.equal value (Exit.Ok 42) "should return the body result"
                 Expect.equal seen 82 "defer should capture the bound value"
+            }
+
+            testTask "for loops over sequences" {
+                let values = ResizeArray<int>()
+
+                let! value =
+                    eff {
+                        for x in [ 1; 2; 3 ] do
+                            values.Add x
+                    }
+                    |> Eff.runTask ()
+
+                Expect.equal value (Exit.Ok ()) "for loop should complete"
+                Expect.sequenceEqual values [ 1; 2; 3 ] "for loop should visit every element"
+            }
+
+            testTask "for keeps enumerator alive across effectful bodies" {
+                let probe = ForProbe [ 1; 2 ]
+                let values = ResizeArray<int>()
+
+                let! value =
+                    eff {
+                        for x in probe.Sequence do
+                            do!
+                                Eff.ofTask (fun () -> task {
+                                    Expect.isFalse probe.Disposed "enumerator should still be alive during the body"
+                                    values.Add x
+                                })
+                    }
+                    |> Eff.runTask ()
+
+                Expect.equal value (Exit.Ok ()) "for loop should complete"
+                Expect.sequenceEqual values [ 1; 2 ] "for loop should visit every element"
+                Expect.isTrue probe.Disposed "enumerator should be disposed after the loop"
+            }
+
+            testTask "for disposes enumerator when the body fails" {
+                let probe = ForProbe [ 1; 2 ]
+
+                let! value =
+                    eff {
+                        for x in probe.Sequence do
+                            if x = 2 then
+                                do! Eff.err "boom"
+                    }
+                    |> Eff.runTask ()
+
+                Expect.equal value (Exit.Err "boom") "body error should short-circuit the loop"
+                Expect.isTrue probe.Disposed "enumerator should still be disposed"
             }
 
             testTask "multiple defers still run on failure" {

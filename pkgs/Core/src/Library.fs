@@ -429,15 +429,22 @@ module CE =
         member _.For
             (sequence: seq<'t>, body: 't -> Eff<unit, 'e, 'env>)
             : Eff<unit, 'e, 'env> =
-            use enumerator = sequence.GetEnumerator()
+            Eff.delay (fun () ->
+                let enumerator = sequence.GetEnumerator()
 
-            let rec loop () =
-                if enumerator.MoveNext() then
-                    Eff.bind (fun () -> loop ()) (body enumerator.Current)
-                else
-                    Eff.value ()
+                let cleanup =
+                    Eff.thunk (fun () -> enumerator.Dispose())
 
-            loop ()
+                let rec loop () =
+                    Eff.delay (fun () ->
+                        if enumerator.MoveNext() then
+                            Eff.bind (fun () -> loop ()) (body enumerator.Current)
+                        else
+                            Eff.value ()
+                    )
+
+                Eff.defer cleanup (loop ())
+            )
 
         [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
         member _.Defer
@@ -460,6 +467,8 @@ module CE =
             |> Eff.bind (fun vspace ->
                 Eff.defer (Eff.thunk (cleanup vspace)) (Eff.value vspace)
             )
+
+        member _.Source(sequence: seq<'t>) : seq<'t> = sequence
 
         member _.Source(eff: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> = eff
 
