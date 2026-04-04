@@ -137,7 +137,7 @@ module CE =
                 Expect.isFalse ran "later CE code should not run"
             }
 
-            testTask "exception thrown inside CE is caught" {
+            testTask "exception thrown inside CE resolves as defect" {
                 let! value =
                     eff {
                         let _ = failwith "boom"
@@ -146,30 +146,23 @@ module CE =
                     |> Eff.runTask ()
 
                 let err: exn = Exit.ex value
-                Expect.equal err.Message "boom" "should catch thrown exceptions"
+                Expect.equal err.Message "boom" "should resolve thrown exceptions as defects"
             }
 
-            testTask "try finally runs on failure" {
-                let mutable cleaned = false
+            testTask "tryCatch inside CE returns Err and short-circuits" {
+                let mutable ran = false
 
                 let! value =
                     eff {
-                        try
-                            let _ = failwith "boom"
-                            return 1
-                        finally
-                            cleaned <- true
+                        let! _ = Eff.tryCatch (fun () -> failwith "boom")
+                        ran <- true
+                        return 1
                     }
                     |> Eff.runTask ()
 
-                let err: exn = Exit.ex value
-
-                Expect.equal
-                    err.Message
-                    "boom"
-                    "should preserve the body defect"
-
-                Expect.isTrue cleaned "finally should run"
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should return the captured exception as Err"
+                Expect.isFalse ran "later CE code should not run"
             }
 
             testTask "use disposes resources" {

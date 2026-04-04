@@ -115,6 +115,32 @@ module Eff =
                     "should capture thrown exceptions as defects"
             }
 
+            testTask "tryCatch captures thrown exceptions as errors" {
+                let! value =
+                    Eff.tryCatch (fun () -> failwith "oh no") |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "oh no" "should return the thrown exception as Err"
+            }
+
+            testTask "tryTask captures thrown exceptions as errors" {
+                let! value =
+                    Eff.tryTask (fun () -> task { failwith "oh no" })
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "oh no" "should return the thrown exception as Err"
+            }
+
+            testTask "tryAsync captures thrown exceptions as errors" {
+                let! value =
+                    Eff.tryAsync (fun () -> async { failwith "oh no" })
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "oh no" "should return the thrown exception as Err"
+            }
+
             testTask "env resolves" {
                 let env = {| UserId = 42; Name = "A" |}
                 let! value = Eff.ask () |> Eff.runTask env
@@ -195,6 +221,45 @@ module Eff =
                     |> Eff.runTask ()
 
                 Expect.equal number 3 "defer should have run"
+            }
+
+            testTask "defer runs after tryCatch failure" {
+                let mutable cleaned = false
+
+                let! value =
+                    Eff.tryCatch (fun () -> failwith "boom")
+                    |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should preserve the captured exception"
+                Expect.isTrue cleaned "defer should run after explicit exception capture"
+            }
+
+            testTask "defer runs after tryTask failure" {
+                let mutable cleaned = false
+
+                let! value =
+                    Eff.tryTask (fun () -> task { failwith "boom" })
+                    |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should preserve the captured exception"
+                Expect.isTrue cleaned "defer should run after explicit task exception capture"
+            }
+
+            testTask "defer runs after tryAsync failure" {
+                let mutable cleaned = false
+
+                let! value =
+                    Eff.tryAsync (fun () -> async { failwith "boom" })
+                    |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+                    |> Eff.runTask ()
+
+                let err: exn = Exit.err value
+                Expect.equal err.Message "boom" "should preserve the captured exception"
+                Expect.isTrue cleaned "defer should run after explicit async exception capture"
             }
 
             testTask "bracket releases after success" {

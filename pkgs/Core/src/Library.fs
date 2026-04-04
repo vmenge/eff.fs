@@ -25,7 +25,6 @@ and Pending<'t, 'e, 'env> =
     | FlatMap of source: Eff<obj, 'e, 'env> * cont: (obj -> Eff<'t, 'e, 'env>)
     | FlatMapSource of source: Source<'env> * cont: (obj -> Eff<'t, 'e, 'env>)
     | Defer of body: Eff<'t, 'e, 'env> * cleanup: Eff<unit, 'e, 'env>
-    | Catch of body: Eff<'t, 'e, 'env> * handler: (exn -> Eff<'t, 'e, 'env>)
 
 [<RequireQualifiedAccess>]
 type Exit<'t, 'e> =
@@ -65,7 +64,7 @@ module Eff =
     let inline read (f: 'a -> 'b) : Eff<'b, 'e, 'a> = Eff.Read f
     let value t = Eff.Pure t
     let err e = Eff.Err e
-    let errwith msg = Eff.Err(exn msg)
+    let errwith msg = Eff.Err(msg)
     let delay f = Eff.Delay f
     let thunk f = Eff.Thunk f
 
@@ -114,8 +113,6 @@ module Eff =
         | Eff.Err e -> Eff.Err(f e)
         | _ -> ef
 
-    let catch f ef = Eff.Pending(Catch(ef, f))
-
     let rec map f ef =
         match ef with
         | Eff.Pure v -> Eff.Pure(f v)
@@ -138,8 +135,6 @@ module Eff =
             | FlatMapSource(source, cont) ->
                 Eff.Pending(FlatMapSource(source, fun x -> cont x |> map f))
             | Defer(body, cleanup) -> Eff.Pending(Defer(map f body, cleanup))
-            | Catch(body, handler) ->
-                Eff.Pending(Catch(map f body, handler >> map f))
 
 
     let rec bind f ef =
@@ -171,10 +166,36 @@ module Eff =
             | FlatMapSource(source, cont) ->
                 Eff.Pending(FlatMapSource(source, fun x -> bind f (cont x)))
             | Defer(body, cleanup) -> Eff.Pending(Defer(bind f body, cleanup))
-            | Catch(body, handler) ->
-                Eff.Pending(Catch(bind f body, handler >> bind f))
 
     let defer cleanup body = Eff.Pending(Defer(body, cleanup))
+
+    let tryCatch (f: unit -> 't) : Eff<'t, exn, 'env> =
+        Eff.Delay(fun () ->
+            try
+                Eff.Pure(f ())
+            with e ->
+                Eff.Err e
+        )
+
+    let tryTask (f: unit -> Task<'t>) : Eff<'t, exn, 'env> =
+        ofTask (fun () -> task {
+            try
+                let! x = f ()
+                return Ok x
+            with e ->
+                return Error e
+        })
+        |> bind ofResult
+
+    let tryAsync (f: unit -> Async<'t>) : Eff<'t, exn, 'env> =
+        ofAsync (fun () -> async {
+            try
+                let! x = f ()
+                return Ok x
+            with e ->
+                return Error e
+        })
+        |> bind ofResult
 
     let bracket acquire release usefn =
         acquire
@@ -263,14 +284,6 @@ module Eff =
                                 result <- Exit.Exn e
                                 finished <- true
 
-                    | Catch(body, handler) ->
-                        let! bodyResult = runLoop env body
-
-                        match bodyResult with
-                        | Exit.Ok value -> current <- Eff.Pure value
-                        | Exit.Err e -> current <- Eff.Err e
-                        | Exit.Exn e -> current <- handler e
-
             return result
         }
 
@@ -308,16 +321,6 @@ module CE =
             (left: Eff<unit, 'e, 'env>, right: Eff<'t, 'e, 'env>)
             : Eff<'t, 'e, 'env> =
             Eff.bind (fun () -> right) left
-
-        member _.TryWith
-            (body: unit -> Eff<'t, 'e, 'env>, handler: exn -> Eff<'t, 'e, 'env>)
-            : Eff<'t, 'e, 'env> =
-            Eff.delay body |> Eff.catch handler
-
-        member _.TryFinally
-            (body: Eff<'t, 'e, 'env>, compensation: unit -> unit)
-            : Eff<'t, 'e, 'env> =
-            Eff.defer (Eff.thunk compensation) body
 
         member _.Using
             (resource: 'r, binder: 'r -> Eff<'t, 'e, 'env>)
