@@ -8,18 +8,18 @@ module Eff =
   let tests =
     testList "Core" [
       testTask "Pure resolves" {
-        let! value = Eff.value 5 |> Eff.runTask ()
+        let! value = Pure 5 |> Eff.runTask ()
         Expect.equal value (Exit.Ok 5) "should be equal"
       }
 
       testTask "Err resolves" {
-        let! value = Eff.err "oh no" |> Eff.runTask ()
+        let! value = Err "oh no" |> Eff.runTask ()
         Expect.equal value (Exit.Err "oh no") "should be equal"
       }
 
       testTask "mapErr maps delayed errors" {
         let! value =
-          Eff.suspend (fun () -> Eff.err "boom")
+          Eff.suspend (fun () -> Err "boom")
           |> Eff.mapErr exn
           |> Eff.runTask ()
 
@@ -29,8 +29,8 @@ module Eff =
 
       testTask "mapErr maps bound errors" {
         let! value =
-          Eff.value 1
-          |> Eff.bind (fun _ -> Eff.err "boom")
+          Pure 1
+          |> Eff.bind (fun _ -> Err "boom")
           |> Eff.mapErr exn
           |> Eff.runTask ()
 
@@ -54,7 +54,7 @@ module Eff =
       }
 
       testTask "Suspend resolves" {
-        let! value = Eff.suspend (fun () -> Eff.value 5) |> Eff.runTask ()
+        let! value = Eff.suspend (fun () -> Pure 5) |> Eff.runTask ()
         Expect.equal value (Exit.Ok 5) "should be equal"
       }
 
@@ -184,7 +184,7 @@ module Eff =
 
         let! value =
           Eff.read (fun (e: {| UserId: int; Name: string |}) -> e.UserId)
-          |> Eff.bind (fun i -> Eff.value (i + 1))
+          |> Eff.bind (fun i -> Pure (i + 1))
           |> Eff.map string
           |> Eff.runTask env
 
@@ -194,19 +194,19 @@ module Eff =
       testTask "full usage" {
         let userId =
           Eff.read (fun (e: {| UserId: int; Name: string |}) -> e.UserId)
-          |> Eff.bind (fun i -> Eff.value (i + 1))
+          |> Eff.bind (fun i -> Pure (i + 1))
           |> Eff.map string
           |> Eff.map int
 
         let myAsyncVal userId =
           Eff.ofAsync (fun () -> async { return userId })
-          |> Eff.bind (fun x -> Eff.value (x + 1))
+          |> Eff.bind (fun x -> Pure (x + 1))
           |> Eff.map string
           |> Eff.map int
 
         let myTaskVal userId =
           Eff.ofTask (fun () -> task { return userId })
-          |> Eff.bind (fun x -> Eff.value (x + 1))
+          |> Eff.bind (fun x -> Pure (x + 1))
           |> Eff.map string
           |> Eff.map int
 

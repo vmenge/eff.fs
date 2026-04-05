@@ -1,6 +1,6 @@
 ﻿open EffFs.Core
 
-let readFile filename : Eff<string, exn, _> = Eff.value "file contents"
+let readFile filename : Eff<string, exn, _> = Pure "file contents"
 
 let parseFile fileContents : Result<{| name: string |}, string> =
   Ok {| name = "bla" |}

@@ -87,7 +87,7 @@ module CE =
         let! value =
           eff {
             let a = 1
-            let! b = Eff.value 2
+            let! b = Pure 2
             let! c = Ok 3
             let! d = Some 4
             let! e = task { return 5 }
@@ -108,7 +108,7 @@ module CE =
       }
 
       testTask "return! eff works" {
-        let! value = eff { return! Eff.value 5 } |> Eff.runTask ()
+        let! value = eff { return! Pure 5 } |> Eff.runTask ()
 
         Expect.equal value (Exit.Ok 5) "should return from Eff directly"
       }
@@ -229,7 +229,7 @@ module CE =
 
         let! value =
           eff {
-            use! _probe = Eff.value probe
+            use! _probe = Pure probe
             return 1
           }
           |> Eff.runTask ()
@@ -258,7 +258,7 @@ module CE =
         let! value =
           eff {
             defer (Eff.thunk (fun () -> cleaned <- true))
-            return! Eff.err "boom"
+            return! Err "boom"
           }
           |> Eff.runTask ()
 
@@ -293,7 +293,7 @@ module CE =
           eff {
             let x = 41
             defer (fun () -> seen <- x)
-            let! y = Eff.value 1
+            let! y = Pure 1
             return x + y
           }
           |> Eff.runTask ()
@@ -307,7 +307,7 @@ module CE =
 
         let! value =
           eff {
-            let! x = Eff.value 41
+            let! x = Pure 41
             defer (Eff.thunk (fun () -> seen <- seen + x))
             defer (fun () -> seen <- seen + x)
             return x + 1
@@ -373,7 +373,7 @@ module CE =
           eff {
             for x in probe.Sequence do
               if x = 2 then
-                do! Eff.err "boom"
+                do! Err "boom"
           }
           |> Eff.runTask ()
 
@@ -392,7 +392,7 @@ module CE =
           eff {
             defer (Eff.thunk (fun () -> events.Add "outer"))
             defer (Eff.thunk (fun () -> events.Add "inner"))
-            return! Eff.err "boom"
+            return! Err "boom"
           }
           |> Eff.runTask ()
 
