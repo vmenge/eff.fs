@@ -10,6 +10,7 @@
     <Compile Include="ScaffoldTests.fs" />
     <Compile Include="RedE2E.fs" />
     <Compile Include="SupportedSyncE2E.fs" />
+    <Compile Include="SupportedAsyncE2E.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

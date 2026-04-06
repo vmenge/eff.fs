@@ -18,8 +18,11 @@ module SupportedSyncE2E =
     Path.Combine(fixtureDirectory, "obj", "Debug", "net10.0", "EffectGen")
 
   let private cleanupGeneratedDirectory () =
-    if Directory.Exists(generatedDirectory) then
-      Directory.Delete(generatedDirectory, true)
+    try
+      if Directory.Exists(generatedDirectory) then
+        Directory.Delete(generatedDirectory, true)
+    with :? DirectoryNotFoundException ->
+      ()
 
   let tests =
     testList "SupportedSyncE2E" [

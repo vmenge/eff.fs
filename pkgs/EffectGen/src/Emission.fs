@@ -36,8 +36,14 @@ module Emission =
 
   let private returnSignature environmentName returnShape =
     match returnShape with
-    | ReturnShape.Plain valueType -> $"Eff<{valueType}, 'e, #{environmentName}>"
-    | ReturnShape.Result(okType, errorType) -> $"Eff<{okType}, {errorType}, #{environmentName}>"
+    | ReturnShape.Plain valueType
+    | ReturnShape.Task valueType
+    | ReturnShape.Async valueType
+    | ReturnShape.ValueTask valueType -> $"Eff<{valueType}, 'e, #{environmentName}>"
+    | ReturnShape.Result(okType, errorType)
+    | ReturnShape.TaskResult(okType, errorType)
+    | ReturnShape.AsyncResult(okType, errorType)
+    | ReturnShape.ValueTaskResult(okType, errorType) -> $"Eff<{okType}, {errorType}, #{environmentName}>"
     | ReturnShape.Unsupported rawType -> failwith $"Unsupported return type reached emission: {rawType}"
 
   let private emitMethod builder effectInterface methodModel =
@@ -55,6 +61,21 @@ module Emission =
     match methodModel.ReturnShape with
     | ReturnShape.Plain _ -> ()
     | ReturnShape.Result _ -> appendLine builder "    |> Eff.bind Eff.ofResult"
+    | ReturnShape.Task _ ->
+        appendLine builder "    |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
+    | ReturnShape.TaskResult _ ->
+        appendLine builder "    |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
+        appendLine builder "    |> Eff.bind Eff.ofResult"
+    | ReturnShape.Async _ ->
+        appendLine builder "    |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
+    | ReturnShape.AsyncResult _ ->
+        appendLine builder "    |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
+        appendLine builder "    |> Eff.bind Eff.ofResult"
+    | ReturnShape.ValueTask _ ->
+        appendLine builder "    |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
+    | ReturnShape.ValueTaskResult _ ->
+        appendLine builder "    |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
+        appendLine builder "    |> Eff.bind Eff.ofResult"
     | ReturnShape.Unsupported _ -> ()
 
     appendLine builder ""

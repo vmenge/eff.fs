@@ -34,10 +34,6 @@ module RedE2E =
 
   let tests =
     testList "RedE2E" [
-      testTask "supported async matrix fixture is red because generated wrappers are missing" {
-        do! assertMissingGeneratedSurface "SupportedAsync" [ "EHttp"; "EStore"; "EFileSystem" ]
-      }
-
       testTask "supported Eff exact fixture is red because generated wrappers are missing" {
         do! assertMissingGeneratedSurface "SupportedEffExact" [ "ERuntime" ]
       }

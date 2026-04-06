@@ -12,6 +12,12 @@ type ParameterGroup =
 type ReturnShape =
   | Plain of valueType: string
   | Result of okType: string * errorType: string
+  | Task of valueType: string
+  | TaskResult of okType: string * errorType: string
+  | Async of valueType: string
+  | AsyncResult of okType: string * errorType: string
+  | ValueTask of valueType: string
+  | ValueTaskResult of okType: string * errorType: string
   | Unsupported of rawType: string
 
 type EffectMethod = {
