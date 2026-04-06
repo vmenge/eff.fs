@@ -8,6 +8,12 @@ open Microsoft.Build.Utilities
 type GenerateEffectFilesTask() =
   inherit Task()
 
+  member private _.clearGeneratedFiles (outputDirectory: string) =
+    Directory.CreateDirectory(outputDirectory) |> ignore
+
+    for staleFile in Directory.GetFiles(outputDirectory, "*.g.fs") do
+      File.Delete(staleFile)
+
   [<Required>]
   member val ProjectDirectory = "" with get, set
 
@@ -23,27 +29,34 @@ type GenerateEffectFilesTask() =
   [<Output>]
   member val OrderedCompileItems : ITaskItem array = [||] with get, set
 
-  member private _.generate (compileInputs: CompileInput array) (outputDirectory: string) =
-    Directory.CreateDirectory(outputDirectory) |> ignore
+  member private _.logDiagnostic (diagnostic: EffectDiagnostic) =
+    base.Log.LogError(
+      (null: string),
+      diagnostic.Code,
+      (null: string),
+      diagnostic.FilePath,
+      diagnostic.Line,
+      diagnostic.Column,
+      diagnostic.Line,
+      diagnostic.Column,
+      diagnostic.Message,
+      [||]
+    )
 
-    for staleFile in Directory.GetFiles(outputDirectory, "*.g.fs") do
-      File.Delete(staleFile)
+  member private this.generate (effectInterfaces: EffectInterface list) (outputDirectory: string) =
+    this.clearGeneratedFiles outputDirectory
 
     let generatedFiles =
-      compileInputs
-      |> Array.collect (fun compileInput ->
-        let parsedFile = FcsParsing.parseFile compileInput.FullPath
+      effectInterfaces
+      |> List.map (fun effectInterface ->
+        let outputPath = Path.Combine(outputDirectory, $"{effectInterface.EnvironmentName}.g.fs")
 
-        Discovery.discoverInterfaces parsedFile
-        |> List.map (fun effectInterface ->
-          let outputPath = Path.Combine(outputDirectory, $"{effectInterface.EnvironmentName}.g.fs")
-
-          {
-            SourceFile = effectInterface.SourceFile
-            OutputPath = outputPath
-            Contents = Emission.emitFile effectInterface
-          })
-        |> List.toArray)
+        {
+          SourceFile = effectInterface.SourceFile
+          OutputPath = outputPath
+          Contents = Emission.emitFile effectInterface
+        })
+      |> List.toArray
 
     for generatedFile in generatedFiles do
       File.WriteAllText(generatedFile.OutputPath, generatedFile.Contents)
@@ -73,14 +86,31 @@ type GenerateEffectFilesTask() =
     try
       let compileInputs = ProjectInputs.compileInputs this.ProjectDirectory this.CompileItems
       let outputDirectory = ProjectInputs.generatedOutputDirectory this.ProjectDirectory this.IntermediateOutputPath
-      let generatedFiles = this.generate compileInputs outputDirectory
+      let parsedFiles =
+        compileInputs
+        |> Array.map (fun compileInput -> FcsParsing.parseFile compileInput.FullPath)
+        |> Array.toList
 
-      this.GeneratedFiles <-
-        generatedFiles
-        |> Array.map (fun generatedFile -> TaskItem(generatedFile.OutputPath) :> ITaskItem)
+      let validation = Validation.validateFiles parsedFiles
 
-      this.OrderedCompileItems <- this.orderedCompileItems compileInputs generatedFiles
-      true
+      if validation.Diagnostics.IsEmpty then
+        let generatedFiles = this.generate validation.Interfaces outputDirectory
+
+        this.GeneratedFiles <-
+          generatedFiles
+          |> Array.map (fun generatedFile -> TaskItem(generatedFile.OutputPath) :> ITaskItem)
+
+        this.OrderedCompileItems <- this.orderedCompileItems compileInputs generatedFiles
+        true
+      else
+        this.clearGeneratedFiles outputDirectory
+
+        for diagnostic in validation.Diagnostics do
+          this.logDiagnostic diagnostic
+
+        this.GeneratedFiles <- [||]
+        this.OrderedCompileItems <- [||]
+        false
     with error ->
       this.Log.LogErrorFromException(error, true, true, null)
       false

@@ -16,5 +16,7 @@ let main argv =
           SupportedAsyncE2E.tests
           SupportedEffExactE2E.tests
           SupportedEffProvideFromE2E.tests
+          DiagnosticsE2E.tests
+          ValidationTests.tests
         ]
     )

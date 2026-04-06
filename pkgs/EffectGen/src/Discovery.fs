@@ -5,6 +5,25 @@ open FSharp.Compiler.Syntax
 open FSharp.Compiler.Text
 
 module Discovery =
+  let private emptyResult = {
+    Interfaces = []
+    Diagnostics = []
+  }
+
+  let private createDiagnostic code filePath line column message = {
+    Code = code
+    Message = message
+    FilePath = filePath
+    Line = line
+    Column = column
+  }
+
+  let private createRangeDiagnostic code filePath (range: range) message =
+    createDiagnostic code filePath range.StartLine (range.StartColumn + 1) message
+
+  let private createIdentDiagnostic code filePath (ident: Ident) message =
+    createRangeDiagnostic code filePath ident.idRange message
+
   let private joinLongIdent (idents: Ident list) =
     idents |> List.map _.idText |> String.concat "."
 
@@ -38,6 +57,16 @@ module Discovery =
       attribute.TypeName
       |> joinSynLongIdent
       |> isEffectName)
+
+  let private isInterfaceRepresentation representation =
+    match representation with
+    | SynTypeDefnRepr.ObjectModel(SynTypeDefnKind.Interface, _, _) -> true
+    | SynTypeDefnRepr.ObjectModel(_, members, _) ->
+        members
+        |> List.forall (function
+          | SynMemberDefn.AbstractSlot _ -> true
+          | _ -> false)
+    | _ -> false
 
   let private renderParameterGroups renderType synType =
     let rec loop nextIndex groups currentType =
@@ -77,74 +106,132 @@ module Discovery =
 
     loop 1 [] synType
 
-  let private discoverMethod renderType memberDefn =
+  let private discoverMethod filePath renderType memberDefn =
     match memberDefn with
     | SynMemberDefn.AbstractSlot
         (
           SynValSig(_, SynIdent(ident, _), _, memberType, _, _, _, _, _, _, _, _),
-          _,
+          memberFlags,
           _,
           _
         ) ->
-        let parameterGroups, returnType = renderParameterGroups renderType memberType
+        if memberFlags.MemberKind <> SynMemberKind.Member then
+          Error [
+            createIdentDiagnostic
+              "EFFGEN002"
+              filePath
+              ident
+              $"[<Effect>] interface member '{ident.idText}' is not supported. Only abstract methods are supported."
+          ]
+        else
+          let parameterGroups, returnType = renderParameterGroups renderType memberType
+          let returnShape = Classification.classifyReturnType renderType returnType
 
-        Some {
-          SourceName = ident.idText
-          WrapperName = Naming.wrapperName ident.idText
-          ParameterGroups = parameterGroups
-          ReturnShape = Classification.classifyReturnType renderType returnType
-        }
-    | _ -> None
+          match returnShape with
+          | ReturnShape.Unsupported rawType ->
+              Error [
+                createIdentDiagnostic
+                  "EFFGEN003"
+                  filePath
+                  ident
+                  $"[<Effect>] method '{ident.idText}' has unsupported return shape '{rawType}'."
+              ]
+          | _ ->
+              Ok {
+                SourceName = ident.idText
+                WrapperName = Naming.wrapperName ident.idText
+                DeclarationLine = ident.idRange.StartLine
+                DeclarationColumn = ident.idRange.StartColumn + 1
+                ParameterGroups = parameterGroups
+                ReturnShape = returnShape
+              }
+    | _ ->
+        Error [
+          createRangeDiagnostic
+            "EFFGEN002"
+            filePath
+            memberDefn.Range
+            "[<Effect>] interface members are not supported here. Only abstract methods are supported."
+        ]
 
-  let private discoverType namespaceName renderType typeDefn =
+  let private discoverType filePath namespaceName renderType typeDefn =
     match typeDefn with
     | SynTypeDefn
         (
           SynComponentInfo(attributes, _, _, longId, _, _, _, _),
-          SynTypeDefnRepr.ObjectModel(_, members, _),
+          representation,
           _,
           _,
           _,
           _
         ) when hasEffectAttribute attributes ->
         let serviceName = longId |> List.last |> _.idText
-        let methods = members |> List.choose (discoverMethod renderType)
+        let typeName = longId |> List.last
 
-        match methods with
-        | [] -> None
-        | discoveredMethods ->
-            let hasUnsupported =
-              discoveredMethods
-              |> List.exists (fun methodModel ->
-                match methodModel.ReturnShape with
-                | ReturnShape.Unsupported _ -> true
-                | _ -> false)
-
-            if hasUnsupported then
-              None
-            else
-              let inheritedEnvironments =
-                discoveredMethods
-                |> List.choose (fun methodModel ->
-                  match methodModel.ReturnShape with
-                  | ReturnShape.Eff(_, _, environmentType)
-                    when environmentType <> "unit"
-                         && environmentType <> Naming.environmentName serviceName
-                         && environmentType <> $"#{Naming.environmentName serviceName}" ->
-                      Some environmentType
-                  | _ -> None)
-                |> List.distinct
-
-              Some {
-                Namespace = namespaceName
-                SourceFile = ""
-                ServiceName = serviceName
-                EnvironmentName = Naming.environmentName serviceName
-                PropertyName = Naming.propertyName serviceName
-                InheritedEnvironments = inheritedEnvironments
-                Methods = discoveredMethods
+        match representation with
+        | SynTypeDefnRepr.ObjectModel(_, members, _) when isInterfaceRepresentation representation ->
+            if members.IsEmpty then
+              {
+                emptyResult with
+                  Diagnostics = [
+                    createIdentDiagnostic
+                      "EFFGEN004"
+                      filePath
+                      typeName
+                      $"[<Effect>] interface '{serviceName}' must declare at least one abstract method."
+                  ]
               }
-    | _ -> None
+            else
+              let discoveredMethods, diagnostics =
+                (([], []), members)
+                ||> List.fold (fun (methodsAcc, diagnosticsAcc) memberDefn ->
+                  match discoverMethod filePath renderType memberDefn with
+                  | Ok methodModel -> methodsAcc @ [ methodModel ], diagnosticsAcc
+                  | Error memberDiagnostics -> methodsAcc, diagnosticsAcc @ memberDiagnostics)
+
+              if diagnostics.IsEmpty then
+                let inheritedEnvironments =
+                  discoveredMethods
+                  |> List.choose (fun methodModel ->
+                    match methodModel.ReturnShape with
+                    | ReturnShape.Eff(_, _, environmentType)
+                      when environmentType <> "unit"
+                           && environmentType <> Naming.environmentName serviceName
+                           && environmentType <> $"#{Naming.environmentName serviceName}" ->
+                        Some environmentType
+                    | _ -> None)
+                  |> List.distinct
+
+                {
+                  emptyResult with
+                    Interfaces = [
+                      {
+                        Namespace = namespaceName
+                        SourceFile = filePath
+                        ServiceName = serviceName
+                        EnvironmentName = Naming.environmentName serviceName
+                        PropertyName = Naming.propertyName serviceName
+                        DeclarationLine = typeName.idRange.StartLine
+                        DeclarationColumn = typeName.idRange.StartColumn + 1
+                        InheritedEnvironments = inheritedEnvironments
+                        Methods = discoveredMethods
+                      }
+                    ]
+                }
+              else
+                { emptyResult with Diagnostics = diagnostics }
+        | _ ->
+            {
+              emptyResult with
+                Diagnostics = [
+                  createIdentDiagnostic
+                    "EFFGEN001"
+                    filePath
+                    typeName
+                    $"[<Effect>] can only be applied to interfaces. '{serviceName}' is not an interface."
+                ]
+            }
+    | _ -> emptyResult
 
   let discoverInterfaces (parsedFile: ParsedSourceFile) =
     let textForRange = textInRange parsedFile.Source
@@ -152,8 +239,8 @@ module Discovery =
 
     match parsedFile.ParseTree with
     | ParsedInput.ImplFile(ParsedImplFileInput(_, _, _, _, modules, _, _, _)) ->
-        modules
-        |> List.collect (fun moduleOrNamespace ->
+        (([], []), modules)
+        ||> List.fold (fun (interfacesAcc, diagnosticsAcc) moduleOrNamespace ->
           match moduleOrNamespace with
           | SynModuleOrNamespace(longId, _, _, declarations, _, _, _, _, _) ->
               let namespaceName =
@@ -162,12 +249,19 @@ module Discovery =
                 else
                   Some (joinLongIdent longId)
 
-              declarations
-              |> List.collect (fun declaration ->
+              ((interfacesAcc, diagnosticsAcc), declarations)
+              ||> List.fold (fun (innerInterfacesAcc, innerDiagnosticsAcc) declaration ->
                 match declaration with
                 | SynModuleDecl.Types(typeDefns, _) ->
-                    typeDefns
-                    |> List.choose (discoverType namespaceName renderType)
-                    |> List.map (fun effectInterface -> { effectInterface with SourceFile = parsedFile.FilePath })
-                | _ -> []))
-    | ParsedInput.SigFile _ -> []
+                    ((innerInterfacesAcc, innerDiagnosticsAcc), typeDefns)
+                    ||> List.fold (fun (typeInterfacesAcc, typeDiagnosticsAcc) typeDefn ->
+                      let discovery = discoverType parsedFile.FilePath namespaceName renderType typeDefn
+
+                      typeInterfacesAcc @ discovery.Interfaces,
+                      typeDiagnosticsAcc @ discovery.Diagnostics)
+                | _ -> innerInterfacesAcc, innerDiagnosticsAcc))
+        |> fun (interfaces, diagnostics) -> {
+          Interfaces = interfaces
+          Diagnostics = diagnostics
+        }
+    | ParsedInput.SigFile _ -> emptyResult

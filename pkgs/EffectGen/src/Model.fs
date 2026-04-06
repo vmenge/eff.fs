@@ -24,6 +24,8 @@ type ReturnShape =
 type EffectMethod = {
   SourceName: string
   WrapperName: string
+  DeclarationLine: int
+  DeclarationColumn: int
   ParameterGroups: ParameterGroup list
   ReturnShape: ReturnShape
 }
@@ -34,6 +36,8 @@ type EffectInterface = {
   ServiceName: string
   EnvironmentName: string
   PropertyName: string
+  DeclarationLine: int
+  DeclarationColumn: int
   InheritedEnvironments: string list
   Methods: EffectMethod list
 }
@@ -42,4 +46,17 @@ type GeneratedFile = {
   SourceFile: string
   OutputPath: string
   Contents: string
+}
+
+type EffectDiagnostic = {
+  Code: string
+  Message: string
+  FilePath: string
+  Line: int
+  Column: int
+}
+
+type DiscoveryResult = {
+  Interfaces: EffectInterface list
+  Diagnostics: EffectDiagnostic list
 }

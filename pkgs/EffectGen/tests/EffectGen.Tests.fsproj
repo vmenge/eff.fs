@@ -13,6 +13,8 @@
     <Compile Include="SupportedAsyncE2E.fs" />
     <Compile Include="SupportedEffExactE2E.fs" />
     <Compile Include="SupportedEffProvideFromE2E.fs" />
+    <Compile Include="DiagnosticsE2E.fs" />
+    <Compile Include="ValidationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

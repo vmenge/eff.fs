@@ -12,6 +12,7 @@
     <Compile Include="Classification.fs" />
     <Compile Include="FcsParsing.fs" />
     <Compile Include="Discovery.fs" />
+    <Compile Include="Validation.fs" />
     <Compile Include="Emission.fs" />
     <Compile Include="EffectAttribute.fs" />
     <Compile Include="GeneratorTask.fs" />
