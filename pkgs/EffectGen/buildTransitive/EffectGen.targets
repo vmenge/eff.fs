@@ -1,2 +1,29 @@
 <Project>
+  <PropertyGroup>
+    <EffectGenTaskAssemblyPath Condition="'$(EffectGenTaskAssemblyPath)' == '' and Exists('$(MSBuildThisFileDirectory)..\src\bin\$(Configuration)\$(TargetFramework)\EffectGen.dll')">$(MSBuildThisFileDirectory)..\src\bin\$(Configuration)\$(TargetFramework)\EffectGen.dll</EffectGenTaskAssemblyPath>
+    <EffectGenTaskAssemblyPath Condition="'$(EffectGenTaskAssemblyPath)' == ''">$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\EffectGen.dll</EffectGenTaskAssemblyPath>
+  </PropertyGroup>
+
+  <UsingTask
+    TaskName="EffFs.EffectGen.GenerateEffectFilesTask"
+    AssemblyFile="$(EffectGenTaskAssemblyPath)"
+    Condition="'$(EffectGenEnabled)' == 'true' and Exists('$(EffectGenTaskAssemblyPath)')" />
+
+  <Target
+    Name="EffectGenGenerateSources"
+    BeforeTargets="FSharpSourceCodeCompileOrder"
+    Condition="'$(EffectGenEnabled)' == 'true' and '$(Language)' == 'F#' and Exists('$(EffectGenTaskAssemblyPath)')">
+    <GenerateEffectFilesTask
+      ProjectDirectory="$(MSBuildProjectDirectory)"
+      IntermediateOutputPath="$(IntermediateOutputPath)"
+      CompileItems="@(Compile)">
+      <Output TaskParameter="GeneratedFiles" ItemName="FileWrites" />
+      <Output TaskParameter="OrderedCompileItems" ItemName="_EffectGenOrderedCompile" />
+    </GenerateEffectFilesTask>
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <Compile Include="@(_EffectGenOrderedCompile)" />
+    </ItemGroup>
+  </Target>
 </Project>
