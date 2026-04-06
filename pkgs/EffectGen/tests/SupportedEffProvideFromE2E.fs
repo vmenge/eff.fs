@@ -25,7 +25,7 @@ module SupportedEffProvideFromE2E =
       ()
 
   let tests =
-    testList "SupportedEffProvideFromE2E" [
+    testSequenced <| testList "SupportedEffProvideFromE2E" [
       testTask "supported Eff provideFrom fixture builds with generated wrappers in the same build" {
         cleanupGeneratedDirectory ()
 

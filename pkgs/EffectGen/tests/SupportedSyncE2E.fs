@@ -25,7 +25,7 @@ module SupportedSyncE2E =
       ()
 
   let tests =
-    testList "SupportedSyncE2E" [
+    testSequenced <| testList "SupportedSyncE2E" [
       testTask "supported sync fixture builds with generated wrappers in the same build" {
         cleanupGeneratedDirectory ()
 

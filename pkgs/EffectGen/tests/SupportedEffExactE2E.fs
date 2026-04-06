@@ -25,7 +25,7 @@ module SupportedEffExactE2E =
       ()
 
   let tests =
-    testList "SupportedEffExactE2E" [
+    testSequenced <| testList "SupportedEffExactE2E" [
       testTask "supported Eff exact fixture builds with generated wrappers in the same build" {
         cleanupGeneratedDirectory ()
 

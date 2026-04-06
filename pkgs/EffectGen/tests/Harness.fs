@@ -36,7 +36,7 @@ module Harness =
   }
 
   let buildProject (projectPath: string) : Task<BuildResult> =
-    runDotnet None $"build \"{projectPath}\" --nologo"
+    runDotnet None $"build \"{projectPath}\" --nologo -t:Rebuild"
 
   let packProject (projectPath: string) (outputDirectory: string) : Task<BuildResult> =
     runDotnet None $"pack \"{projectPath}\" --nologo -o \"{outputDirectory}\""

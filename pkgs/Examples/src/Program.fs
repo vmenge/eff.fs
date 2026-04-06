@@ -1,32 +1,20 @@
-﻿open EffFs.Core
+module EffFs.Examples.Program
 
-let readFile filename : Eff<string, exn, _> = Pure "file contents"
+open EffFs.Core
 
-let parseFile fileContents : Result<{| name: string |}, string> =
-  Ok {| name = "bla" |}
+type ConsoleGreeter() =
+  interface IGreeter with
+    member _.Greet(name: string) = $"Hello, {name}."
 
-let x () = eff {
-  let! contents = readFile "bla"
-  let! parsed = parseFile contents |> Result.mapError exn
+type AppEnv() =
+  let greeter = ConsoleGreeter() :> IGreeter
 
-  printfn $"{parsed}"
+  interface EGreeter with
+    member _.Greeter = greeter
 
-  ()
-}
+let greetingProgram (name: string) : Eff<string, exn, #EGreeter> =
+  EGreeter.greet name
 
-let y () =
-  readFile "bla"
-  |> Eff.bind (fun contents -> contents |> parseFile |> Eff.ofResultWith exn)
-
-[<Interface>]
-type ILogger =
-  abstract Debug: string -> unit
-  abstract Error: string -> unit
-
-[<Interface>]
-type ELogger =
-  abstract Logger: ILogger
-
-module ELogger =
-  let debug (env: #ELogger) fmt = env.Logger.Debug fmt
-  let error (env: #ELogger) fmt = env.Logger.Error fmt
+let exampleGreeting () =
+  greetingProgram "EffectGen"
+  |> Eff.runSync (AppEnv())

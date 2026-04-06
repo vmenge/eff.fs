@@ -1,16 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="..\..\EffectGen\buildTransitive\EffectGen.props" />
+
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Interfaces.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\src\Core.fsproj" />
+    <ProjectReference Include="..\..\EffectGen\src\EffectGen.fsproj" />
   </ItemGroup>
+
+  <Import Project="..\..\EffectGen\buildTransitive\EffectGen.targets" />
 
 </Project>

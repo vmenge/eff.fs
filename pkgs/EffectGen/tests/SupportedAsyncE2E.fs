@@ -25,7 +25,7 @@ module SupportedAsyncE2E =
       ()
 
   let tests =
-    testList "SupportedAsyncE2E" [
+    testSequenced <| testList "SupportedAsyncE2E" [
       testTask "supported async fixture builds with generated wrappers in the same build" {
         cleanupGeneratedDirectory ()
 

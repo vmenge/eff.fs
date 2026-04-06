@@ -6,8 +6,7 @@ let main argv =
   runTestsWithCLIArgs
     []
     argv
-    (
-      testList
+    (testSequenced <| testList
         "all"
         [
           ScaffoldTests.tests
