@@ -6,4 +6,14 @@ let main argv =
   runTestsWithCLIArgs
     []
     argv
-    (testList "all" [ ScaffoldTests.tests; RedE2E.tests; SupportedSyncE2E.tests; SupportedAsyncE2E.tests ])
+    (
+      testList
+        "all"
+        [
+          ScaffoldTests.tests
+          RedE2E.tests
+          SupportedSyncE2E.tests
+          SupportedAsyncE2E.tests
+          SupportedEffExactE2E.tests
+        ]
+    )

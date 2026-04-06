@@ -32,13 +32,31 @@ module RedE2E =
       $"fixture {fixtureName} should fail because generated surfaces are missing"
   }
 
+  let private assertMeaningfulRedFailure (fixtureName: string) (expectedFragments: string list) = task {
+    let! result = buildProject (fixtureProject fixtureName)
+
+    Expect.notEqual result.ExitCode 0 $"fixture {fixtureName} should still fail before its wave turns green"
+
+    Expect.isFalse
+      (result.Output.Contains("MSB9008")
+       || result.Output.Contains("does not exist")
+       || result.Output.Contains("The namespace or module 'EffFs' is not defined")
+       || result.Output.Contains("The type 'Effect' is not defined")
+       || result.Output.Contains("The type 'Eff' is not defined"))
+      $"fixture {fixtureName} should fail because its generation behavior is not implemented yet, not because of broken plumbing"
+
+    for expected in expectedFragments do
+      Expect.isTrue
+        (result.Output.Contains(expected))
+        $"fixture {fixtureName} should mention the expected unfinished behavior marker {expected}"
+  }
+
   let tests =
     testList "RedE2E" [
-      testTask "supported Eff exact fixture is red because generated wrappers are missing" {
-        do! assertMissingGeneratedSurface "SupportedEffExact" [ "ERuntime" ]
-      }
-
-      testTask "supported Eff provideFrom fixture is red because generated wrappers are missing" {
-        do! assertMissingGeneratedSurface "SupportedEffProvideFrom" [ "ERuntimeService" ]
+      testTask "supported Eff provideFrom fixture is red because mechanical adaptation is not implemented yet" {
+        do!
+          assertMeaningfulRedFailure
+            "SupportedEffProvideFrom"
+            [ "Unsupported Eff environment adaptation target in W4"; "IRuntimeEnv" ]
       }
     ]

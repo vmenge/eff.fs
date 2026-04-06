@@ -11,6 +11,7 @@
     <Compile Include="RedE2E.fs" />
     <Compile Include="SupportedSyncE2E.fs" />
     <Compile Include="SupportedAsyncE2E.fs" />
+    <Compile Include="SupportedEffExactE2E.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

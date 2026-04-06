@@ -18,6 +18,7 @@ type ReturnShape =
   | AsyncResult of okType: string * errorType: string
   | ValueTask of valueType: string
   | ValueTaskResult of okType: string * errorType: string
+  | Eff of okType: string * errorType: string * environmentType: string
   | Unsupported of rawType: string
 
 type EffectMethod = {

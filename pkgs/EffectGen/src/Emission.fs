@@ -43,7 +43,8 @@ module Emission =
     | ReturnShape.Result(okType, errorType)
     | ReturnShape.TaskResult(okType, errorType)
     | ReturnShape.AsyncResult(okType, errorType)
-    | ReturnShape.ValueTaskResult(okType, errorType) -> $"Eff<{okType}, {errorType}, #{environmentName}>"
+    | ReturnShape.ValueTaskResult(okType, errorType)
+    | ReturnShape.Eff(okType, errorType, _) -> $"Eff<{okType}, {errorType}, #{environmentName}>"
     | ReturnShape.Unsupported rawType -> failwith $"Unsupported return type reached emission: {rawType}"
 
   let private emitMethod builder effectInterface methodModel =
@@ -76,6 +77,14 @@ module Emission =
     | ReturnShape.ValueTaskResult _ ->
         appendLine builder "    |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
         appendLine builder "    |> Eff.bind Eff.ofResult"
+    | ReturnShape.Eff(_, _, environmentType) ->
+        if environmentType = "unit" then
+          appendLine builder "    |> Eff.map (Eff.provideFrom (fun _ -> ()))"
+          appendLine builder "    |> Eff.flatten"
+        elif environmentType = effectInterface.EnvironmentName || environmentType = $"#{effectInterface.EnvironmentName}" then
+          appendLine builder "    |> Eff.flatten"
+        else
+          failwith $"Unsupported Eff environment adaptation target in W4: {environmentType}"
     | ReturnShape.Unsupported _ -> ()
 
     appendLine builder ""

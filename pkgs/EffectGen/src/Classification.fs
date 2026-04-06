@@ -35,6 +35,9 @@ module Classification =
         match resultTypeArguments renderType innerType with
         | Some(okType, errorType) -> ReturnShape.ValueTaskResult(okType, errorType)
         | None -> ReturnShape.ValueTask(renderType innerType)
+    | SynType.App(typeName, _, [ okType; errorType; environmentType ], _, _, _, _)
+      when isNamedType "Eff" typeName ->
+        ReturnShape.Eff(renderType okType, renderType errorType, renderType environmentType)
     | SynType.App(typeName, _, _, _, _, _, _)
       when isNamedType "Eff" typeName ->
         ReturnShape.Unsupported(renderType synType)
