@@ -1,569 +1,413 @@
-# F# Eff Effect Spec
+# F# Eff Current Spec
+
+This document describes the implementation that exists today in `pkgs/Core/src`.
+
+If this file disagrees with the code, the code wins. This spec is meant to be a map of the current system, not a design wish list.
 
 ## Goals
 
-Build an `Eff` effect for F# with these priorities:
+The current library is a small, lazy effect system for F# with these priorities:
 
-- good external developer ergonomics
-- strong performance
-- support for sync and async effects
-- support for environment-based dependency injection
-- lazy effect construction
-- unified error handling
-- small composable environments
+- explicit success, managed-error, and defect channels
+- first-class environment access
+- lazy interop with synchronous and asynchronous work
+- stack-safe composition
+- deterministic cleanup
+- ergonomic use through pipelines and computation expressions
 
-Internal implementation ergonomics are less important than runtime behavior and external API quality.
+## Core Types
 
----
+### `Eff<'t, 'e, 'env>`
 
-## Core Representation
-
-Primary shape:
+The public effect type is:
 
 ```fsharp
-[<Struct>]
-type Eff<'t, 'env> =
-  private
+[<Struct; RequireQualifiedAccess>]
+type Eff<'t, 'e, 'env> =
+  internal
   | Pure of value: 't
-  | Err of err: exn
-  | Delay of delay: (unit -> Eff<'t, 'env>)
+  | Err of err: 'e
+  | Crash of exn: exn
+  | Suspend of suspend: (unit -> Eff<'t, 'e, 'env>)
   | Thunk of thunk: (unit -> 't)
-  | Tsk of tsk: (unit -> Task<'t>)
-  | Asy of asy: (unit -> Async<'t>)
-  | Pending of pending: obj * step: Step<'t, 'env>
+  | Task of tsk: (unit -> Task<'t>)
+  | Read of read: ('env -> 't)
+  | Node of Node<'t, 'e, 'env>
 ```
 
-Notes:
+Meaning of each case:
 
-- `Eff` is a struct discriminated union.
-- `Pure` is the zero-cost success fast path.
-- `Err` stores `exn` directly.
-- `Delay`, `Thunk`, `Tsk`, and `Asy` are direct lazy runtime cases.
-- `Pending` stores erased composed runtime state plus a private step delegate.
-- the union is private; construction is intended to go through the `Eff` module
-- No extra public branch for “early exit”.
+- `Pure` is an already-available successful value.
+- `Err` is a managed error value of type `'e`.
+- `Crash` is an unrecovered exception. This is the defect channel.
+- `Suspend` delays production of another `Eff`.
+- `Thunk` delays synchronous work that returns a value.
+- `Task` delays asynchronous work backed by `Task<'t>`.
+- `Read` reads from the current environment.
+- `Node` is the internal representation for composed operations such as `bind`, `catch`, `defer`, and `provideFrom`.
 
-### Why `exn`
+The union cases are internal. User code constructs effects through the `Eff` module and the computation expressions.
 
-Chosen over a custom internal error union because:
+### `Exit<'t, 'e>`
 
-- simpler runtime
-- less branching
-- better interop with .NET exceptions, `Task`, `Async`
-- preserves stack traces when the original exception is kept
-- lower implementation complexity
-
-`Result` and `Option` inputs are normalized into this error channel.
-
----
-
-## Error Handling
-
-### Internal model
-
-All failures normalize to:
+Runners return:
 
 ```fsharp
-Err of exn
+[<RequireQualifiedAccess>]
+type Exit<'t, 'e> =
+  | Ok of 't
+  | Err of 'e
+  | Exn of exn
 ```
-
-Examples:
-
-- thrown exception -> `Err ex`
-- faulted `Task` -> `Err ex`
-- faulted `Async` -> `Err ex`
-- `Result.Error e` -> mapped to an exception
-- `None` -> mapped to an exception
-
-### Stack traces
-
-Using `exn` preserves stack traces as long as the original exception object is kept.
-
-If an error source is not originally an exception, such as `Option.None` or `Result.Error`, any generated exception only has a stack trace from the point where it was created.
-
-### CE exception behavior
-
-The `eff {}` computation expression should automatically catch exceptions thrown inside user callbacks and normalize them into `Err exn`.
-
-This applies to:
-
-- pure synchronous user code inside the CE
-- `bind`
-- `map`
-- `catch`
-- conversions from `Task`, `Async`, Promise
-- cleanup/finalizer code as appropriate
-
-Exceptions should not leak through the effect abstraction by default.
-
----
-
-## Laziness
-
-Effects should be lazy at effect boundaries by default.
 
 Meaning:
 
-- constructing an `Eff` value should not start work
-- running happens only via `run*` functions
-- interop constructors from eager worlds should take thunks
-- `Pure` and `Err` remain strict terminal values
-- laziness should primarily live in suspended/effectful constructors and pending state
+- `Ok` is successful completion.
+- `Err` is completion with a managed error.
+- `Exn` is completion with an unrecovered defect.
 
-Preferred constructor shapes:
+The helper module `Exit` exposes `isOk`, `ok`, `err`, and `ex`.
 
-```fsharp
-Eff.value     : 'T -> Eff<'T, 'Env>
-Eff.err       : exn -> Eff<'T, 'Env>
-Eff.errwith   : string -> Eff<'T, 'Env>
-Eff.thunk     : (unit -> 'T) -> Eff<'T, 'Env>
-Eff.delay     : (unit -> Eff<'T, 'Env>) -> Eff<'T, 'Env>
-Eff.ofTask    : (unit -> Task<'T>) -> Eff<'T, 'Env>
-Eff.ofValueTask : (unit -> ValueTask<'T>) -> Eff<'T, 'Env>
-Eff.ofAsync   : (unit -> Async<'T>) -> Eff<'T, 'Env>
-```
+### `Report`
 
-Benefits:
-
-- referential transparency
-- better retry/finalizer semantics
-- better composability
-- easier guard/ensure-style APIs
-- clearer control over when effects begin
-
-Performance note:
-
-- laziness is not automatically faster
-- main cost comes from closures/thunks and extra nodes
-- `Pure` and `Err` should remain strict and cheap
-
----
-
-## Runtime Representation
-
-The current implementation uses specialized direct DU cases for common suspended forms and reserves `Pending` for composed/internal runtime state.
+`Report` is an exception wrapper used when the library needs an `exn` surface without discarding the original payload.
 
 ```fsharp
-[<Struct>]
-type Eff<'t, 'env> =
-  private
-  | Pure of value: 't
-  | Err of err: exn
-  | Delay of delay: (unit -> Eff<'t, 'env>)
-  | Thunk of thunk: (unit -> 't)
-  | Tsk of tsk: (unit -> Task<'t>)
-  | Asy of asy: (unit -> Async<'t>)
-  | Pending of pending: obj * step: Step<'t, 'env>
+type Report(o: obj, msg: string, ?inner: exn) =
+  inherit System.Exception(msg, defaultArg inner null)
+  member _.Err = o
 ```
 
-### `Step`
+`Report.make` and `Report.makewith` preserve existing `Report` instances, wrap plain exceptions once, and otherwise store arbitrary values in `Err`.
 
-`Step<'T, 'Env>` is a private delegate used to advance composed pending state.
+The active pattern `ReportAs` extracts the original payload from a `Report`.
 
-Conceptual shape:
+## Error Model
+
+The current runtime is tri-channel:
+
+- success: `'t`
+- managed error: `'e`
+- defect: `exn`
+
+This distinction is central to the library.
+
+Managed errors:
+
+- are created with `Eff.Err`
+- flow through `mapErr`, `orElse`, `orElseWith`, and `tapErr`
+- are returned by runners as `Exit.Err`
+
+Defects:
+
+- are created with `Eff.Crash`
+- also arise when user code throws inside `Thunk`, `Suspend`, `Task`, `Read`, mapping functions, bind continuations, cleanup code, and other runtime callbacks
+- are handled with `catch` and `tapExn`
+- are returned by runners as `Exit.Exn`
+
+This means exceptions are not automatically turned into managed errors. If the user wants thrown exceptions to become managed errors, they must opt in with `tryCatch`, `tryTask`, or `tryAsync`.
+
+### Capturing Exceptions as Managed Errors
+
+The library exposes:
 
 ```fsharp
-type Step<'T, 'Env> =
-    delegate of obj * 'Env -> ValueTask<Eff<'T, 'Env>>
+Eff.tryCatch : (unit -> 't) -> Eff<'t, exn, 'env>
+Eff.tryTask  : (unit -> Task<'t>) -> Eff<'t, exn, 'env>
+Eff.tryAsync : (unit -> Async<'t>) -> Eff<'t, exn, 'env>
 ```
 
-This is the preferred mental model:
+These helpers catch thrown exceptions and return them through the managed error channel as `exn`.
 
-- `Pure` and `Err` are terminal
-- `Delay`, `Thunk`, `Tsk`, and `Asy` are direct lazy leaf cases
-- `Pending (state, step)` means the runtime should ask `step` to advance `state`
-- `Pending` is intended for composed operations such as `map`, `bind`, `catch`, and `finally`
+## Laziness
 
-### Why not make everything `Pending`
+Effects are lazy at effect boundaries:
 
-Using dedicated DU cases for common suspended forms avoids paying an extra wrapper allocation for every pending computation.
+- `Pure`, `Err`, and `Crash` already contain values
+- `Suspend`, `Thunk`, `Task`, and `Read` do not run until interpreted by a runner
+- `ofTask`, `ofValueTask`, and `ofAsync` all take thunks so work starts only when the effect runs
 
-This is especially important for:
+This is an execution model, not a promise of zero allocation. Composed programs still build runtime nodes and closures.
 
-- delayed sync work
-- task interop
-- async interop
-- other simple lazy leaf effects
+## Environment Model
 
-`Pending` still exists for the cases that genuinely need erased composed state.
-
-## Why not `Pending of ValueTask<Eff<'T, 'Env>>`
-
-Rejected as the primary public representation.
-
-Example rejected shape:
+The library has built-in reader-style environment access:
 
 ```fsharp
-[<Struct>]
-type Eff<'T, 'Env> =
-  | Pure of 'T
-  | Err of exn
-  | Pending of ValueTask<Eff<'T, 'Env>>
+Eff.ask  : unit -> Eff<'env, 'e, 'env>
+Eff.read : ('env -> 't) -> Eff<'t, 'e, 'env>
 ```
 
-Reasons:
+There are two ways to shape environments:
 
-- `ValueTask` has one-shot/sensitive consumption semantics
-- storing it directly in a copyable struct union is fragile
-- copying `Eff` copies the `ValueTask`
-- makes the public `Eff` type fatter than desired
-- couples public representation too tightly to a low-level async primitive
+- concrete records or anonymous records
+- small capability interfaces used through subtype constraints
 
-`ValueTask` may still be used internally inside the runtime, but the current implementation normalizes `ofValueTask` into the `Tsk` path.
+Both styles work today. The tests and example use both.
 
----
-
-## Running Eff
-
-### Public runners
-
-On .NET:
+Environment substitution is explicit:
 
 ```fsharp
-Eff.runSync  : 'Env -> Eff<'T, 'Env> -> Result<'T, exn>
-Eff.runTask  : 'Env -> Eff<'T, 'Env> -> Task<Result<'T, exn>>
-Eff.runAsync : 'Env -> Eff<'T, 'Env> -> Async<Result<'T, exn>>
+Eff.provideFrom : ('outer -> 'inner) -> Eff<'t, 'e, 'inner> -> Eff<'t, 'e, 'outer>
+Eff.provide     : 'env -> Eff<'t, 'e, 'env> -> Eff<'t, 'e, unit>
 ```
 
-On Fable:
+`provideFrom` scopes only the subtree it wraps. The outer environment remains visible before and after that subtree. Projected environments survive suspension points because `provideFrom` runs the inner effect in a child runtime and resumes the outer one when the inner machine completes.
+
+## Constructors and Conversions
+
+The public construction surface in `Eff` is:
 
 ```fsharp
-Eff.runPromise : 'Env -> Eff<'T, 'Env> -> JS.Promise<Result<'T, exn>>
+Eff.Pure      : 't -> Eff<'t, 'e, 'env>
+Eff.Err       : 'e -> Eff<'t, 'e, 'env>
+Eff.Crash     : exn -> Eff<'t, 'e, 'env>
+Eff.Suspend   : (unit -> Eff<'t, 'e, 'env>) -> Eff<'t, 'e, 'env>
+Eff.Thunk     : (unit -> 't) -> Eff<'t, 'e, 'env>
+Eff.Task      : (unit -> Task<'t>) -> Eff<'t, 'e, 'env>
+Eff.Read      : ('env -> 't) -> Eff<'t, 'e, 'env>
 ```
 
-### `runSync`
-
-`runSync` is valid and useful.
-
-It is especially appropriate at top-level boundaries such as:
-
-- process entrypoints
-- CLI tools
-- test runners
-- worker entrypoints
-- outermost host boundaries under your control
-
-It should not be the only runner, because:
-
-- request-level/server-internal code often should stay async
-- UI code should not block
-- JS/Fable cannot provide the same normal blocking semantics
-
----
-
-## Environment / Dependency Injection
-
-Environment support is desired and should be composable.
-
-Chosen shape:
+Lowercase aliases and helpers also exist:
 
 ```fsharp
-type Eff<'T, 'Env>
+Eff.suspend
+Eff.thunk
+Eff.failw
+Eff.report
+Eff.reportw
 ```
 
-### Why `'T` first and `'Env` second
-
-This reads better in the common case and allows nicer env-less aliases.
-
-Inference usually leaves `'Env` generic if unconstrained.
-
-Example:
+Interop helpers:
 
 ```fsharp
-Eff.value 123
+Eff.ofResult
+Eff.ofResultWith
+Eff.ofOption
+Eff.ofOptionWith
+Eff.ofValueOption
+Eff.ofValueOptionWith
+Eff.ofTask
+Eff.ofValueTask
+Eff.ofAsync
 ```
 
-should infer something equivalent to:
+Current conversion rules:
+
+- `Result.Ok` becomes `Pure`
+- `Result.Error` becomes `Err`
+- `Option.None` becomes `Err (Report.make None)`
+- `ValueOption.ValueNone` becomes `Err (Report.make ValueNone)`
+- `ValueTask` is normalized into the `Task` path
+- `Async` is normalized into the `Task` path with `Async.StartAsTask`
+
+## Core Combinators
+
+The current public combinators are:
 
 ```fsharp
-Eff<int, 'Env>
+Eff.map
+Eff.bind
+Eff.mapErr
+Eff.flatten
+Eff.filterOr
+Eff.orElse
+Eff.orElseWith
+Eff.tap
+Eff.tapErr
+Eff.catch
+Eff.tapExn
+Eff.defer
+Eff.bracket
+Eff.orRaise
+Eff.orRaiseWith
 ```
 
-not force `unit`.
+Key semantics:
 
-### No default generic parameter
+- `map` transforms only successful values.
+- `bind` sequences successful values.
+- `mapErr` transforms only managed errors.
+- `orElse` and `orElseWith` recover only managed errors.
+- `catch` recovers only defects.
+- `tap` preserves the original success value.
+- `tapErr` preserves the original managed error unless the tap fails.
+- `tapExn` preserves the original defect unless the tap fails.
+- `flatten` runs nested effects in the same ambient environment.
+- `filterOr` preserves the successful value when the predicate passes and switches to `orFn` when it fails.
+- `orRaise` and `orRaiseWith` convert managed errors into defects.
 
-F# does not provide the desired default generic argument behavior here, so aliases should be used where helpful.
+## Cleanup Semantics
 
-Possible alias pattern:
+The library supports cleanup in two ways:
 
 ```fsharp
-type Eff0<'T> = Eff<'T, unit>
+Eff.defer   : Eff<unit, 'e, 'env> -> Eff<'t, 'e, 'env> -> Eff<'t, 'e, 'env>
+Eff.bracket : Eff<'r, 'e, 'env> -> ('r -> Eff<unit, 'e, 'env>) -> ('r -> Eff<'t, 'e, 'env>) -> Eff<'t, 'e, 'env>
 ```
 
----
-
-## Dependency Injection Style
-
-Large monolithic env records were rejected as the primary model because ergonomics become poor.
-
-Two candidate DI styles were discussed.
-
-### Preferred style: capability interfaces
-
-Define small capabilities:
-
-```fsharp
-type IHasLogger =
-    abstract Logger : ILogger
-
-type IHasDb =
-    abstract Db : IDb
-```
-
-Then functions depend only on what they need:
-
-```fsharp
-val logInfo  : string -> Eff<unit, 'Env> when 'Env :> IHasLogger
-val getUser  : int -> Eff<User, 'Env> when 'Env :> IHasDb
-val greetUser : int -> Eff<string, 'Env> when 'Env :> IHasLogger and 'Env :> IHasDb
-```
-
-Concrete env values implement multiple interfaces.
-
-This gives:
-
-- small env requirements
-- decent composition
-- no giant record in every function signature
-
-### Secondary style: small records + adapters
-
-Also possible:
-
-```fsharp
-type LoggerEnv = { Logger : ILogger }
-type DbEnv = { Db : IDb }
-```
-
-Then use adapter functions or `local` to run smaller-env effects inside bigger-env effects.
-
-This is more explicit but more boilerplate-heavy.
-
-### Chosen preference
-
-Capability interfaces are preferred over small-record adapters for primary ergonomics.
-
----
-
-## Computation Expression Semantics
-
-The CE should support `let!` over multiple source types by converting them into `Eff`.
-
-Supported conceptual sources:
-
-- `Eff<'T, 'Env>`
-- `Result<'T, 'E>`
-- `Option<'T>`
-- `Task<'T>`
-- `ValueTask<'T>`
-- `Async<'T>`
-- Promise under Fable
-
-This can be implemented with `Source` overloads or overloaded `Bind`, with a preference for normalizing sources into `Eff` first.
-
-Example target usage:
-
-```fsharp
-eff {
-  let! x = someIo
-  let! y = someResult
-  let! z = someOption
-  let! t = someTask
-  return x
-}
-```
-
-### Source normalization
-
-Preferred strategy:
-
-- `Result` -> immediate `Pure` / `Err`
-- `Option` -> immediate `Pure` / `Err`
-- `Task` -> lazy `Tsk`
-- `Async` -> lazy `Asy`
-- `ValueTask` -> currently normalized into the `Tsk` path
-- no storing of `Result` or `Option` inside `Pending`
-
----
-
-## Guard / Ensure / Early Return
-
-No extra public union case should be added for early exit.
-
-Rejected idea:
-
-- adding a dedicated `Exit` branch to `Eff`
-
-Preferred direction:
-
-- use helper combinators that preserve the current value or short-circuit through existing semantics
-
-The most practical API shape is value-preserving helpers such as:
-
-```fsharp
-Eff.ensure : ('T -> bool) -> Eff<'T, 'Env> -> Eff<'T, 'Env>
-```
-
-Example:
-
-```fsharp
-loadUser id
-|> Eff.ensure isActive
-```
-
-Inside CE:
-
-```fsharp
-eff {
-  let! user = loadUser id |> Eff.ensure isActive
-  return user
-}
-```
-
-This preserves the successful value and stops the computation if the predicate fails.
-
-The exact internal encoding of this short-circuit remains open, but no extra public DU branch should be added.
-
----
-
-## Cleanup / Defer
-
-Defer-style cleanup is desired, similar in spirit to Go/Odin `defer`.
-
-Desired capabilities:
-
-```fsharp
-Eff.defer      : (unit -> unit) -> Eff<unit, 'Env>
-Eff.deferIO    : (unit -> Eff<unit, 'Env>) -> Eff<unit, 'Env>
-Eff.finallyDo  : (unit -> unit) -> Eff<'T, 'Env> -> Eff<'T, 'Env>
-Eff.finallyIO  : (unit -> Eff<unit, 'Env>) -> Eff<'T, 'Env> -> Eff<'T, 'Env>
-Eff.bracket    : Eff<'R, 'Env> -> ('R -> Eff<unit, 'Env>) -> ('R -> Eff<'T, 'Env>) -> Eff<'T, 'Env>
-```
-
-Semantics:
+Current guarantees:
 
 - cleanup runs on success
-- cleanup runs on failure
+- cleanup runs on managed error
+- cleanup runs on defect
 - multiple defers run in LIFO order
-- cleanup should also run when computations short-circuit
+- `bracket` release runs even when `usefn` throws before returning an effect
 
----
+Override rules:
 
-## Public API Direction
+- if cleanup returns `Err`, that managed error replaces the earlier result
+- if cleanup crashes, that defect replaces the earlier result
+- for `bracket`, release failure overrides both body success and body managed error
 
-### Core constructors
+These semantics are deliberate. Cleanup failure wins.
+
+## Computation Expressions
+
+### `eff`
+
+The default builder is `eff`.
+
+It supports:
+
+- `return`
+- `return!`
+- `let!`
+- `do!`
+- `use`
+- `use!`
+- `while`
+- `for`
+- `defer` as a custom operation
+
+Supported `let!` sources are:
+
+- `Eff<'t, 'e, 'env>`
+- `Result<'t, 'e>`
+- `Option<'t>`
+- `ValueOption<'t>`
+- `Task<'t>`
+- `ValueTask<'t>`
+- `Async<'t>`
+- `Task<Result<'t, 'e>>`
+- `ValueTask<Result<'t, 'e>>`
+- `Async<Result<'t, 'e>>`
+
+Important behavior:
+
+- `Result.Error` short-circuits through the managed error channel
+- `Option.None` and `ValueOption.ValueNone` short-circuit as `Report`-backed `exn` errors
+- exceptions thrown directly inside CE user code are defects, not managed errors
+- `use` and `use!` are implemented through `bracket`
+- `for` keeps the enumerator alive across effectful bodies and disposes it at the end
+
+### `effr`
+
+The second builder is `effr`.
+
+`effr` keeps the same control-flow behavior as `eff` but normalizes managed errors to `exn` by mapping them through `Report.make`.
+
+This gives an `Eff<'t, exn, 'env>` surface while preserving original error payloads inside `Report`.
+
+Current normalization rules:
+
+- existing `Report` values flow through unchanged
+- plain exceptions become `Report` with the original exception as `InnerException`
+- non-exception payloads become `Report` carrying the original payload
+
+`effr` does not collapse defects into managed errors. Defects remain defects.
+
+## Running Effects
+
+The current runners are:
 
 ```fsharp
-Eff.value     : 'T -> Eff<'T, 'Env>
-Eff.err       : exn -> Eff<'T, 'Env>
-Eff.errwith   : string -> Eff<'T, 'Env>
-Eff.thunk     : (unit -> 'T) -> Eff<'T, 'Env>
-Eff.delay     : (unit -> Eff<'T, 'Env>) -> Eff<'T, 'Env>
-Eff.ofTask    : (unit -> Task<'T>) -> Eff<'T, 'Env>
-Eff.ofValueTask : (unit -> ValueTask<'T>) -> Eff<'T, 'Env>
-Eff.ofAsync   : (unit -> Async<'T>) -> Eff<'T, 'Env>
+Eff.runTask : 'env -> Eff<'t, 'e, 'env> -> Task<Exit<'t, 'e>>
+Eff.runSync : 'env -> Eff<'t, 'e, 'env> -> Exit<'t, 'e>
 ```
 
-### Core combinators
+`runSync` is implemented by awaiting `runTask`.
+
+There is no public `runAsync`, `runValueTask`, or Fable `runPromise` runner in the current codebase.
+
+## Runtime Architecture
+
+The runtime is not based on a public `Pending` case. It is based on:
+
+- specialized leaf cases on `Eff`
+- internal `Node` subclasses for composed work
+- a frame-based interpreter
+- a small machine/trampoline for async suspension
+
+Composition nodes live in `EffNodes`:
+
+- `Map`
+- `FlatMap`
+- `MapErr`
+- `FlatMapErr`
+- `FlatMapExn`
+- `Defer`
+- `Bracket`
+- `ProvideFrom`
+
+Interpretation lives in `EffRuntime`:
+
+- `stepEff` executes one effect step
+- `unwind` walks frames after success, managed error, or defect
+- `TypedMachine` and `runTaskLoop` drive asynchronous progress
+- `RuntimeStepper` carries the environment and supports projection into child environments
+
+The runtime uses boxed values internally when crossing generic boundaries. This is part of the current design.
+
+## Tested Guarantees
+
+The test suite currently asserts all of the following:
+
+- deep `Suspend` chains are stack-safe
+- deep `bind` chains are stack-safe
+- `Task` and `Async` faults preserve the original exception rather than wrapping it in `AggregateException`
+- canceled tasks surface as `TaskCanceledException`
+- environment projection survives asynchronous suspension
+- cleanup runs before outer `catch` observes a defect
+- `for` loops dispose enumerators even when the body fails
+
+These behaviors are part of the current contract.
+
+## Current Non-Goals
+
+This repository does not currently implement:
+
+- an `Eff<'t, 'env>` exn-only core type
+- a public `Pending of obj * Step` representation
+- automatic conversion of all exceptions into managed errors
+- `ensure`, `finallyDo`, or `finallyIO` helpers
+- parallel composition or concurrency combinators
+- alternate runtimes for Fable or promises
+
+## Minimal Example
 
 ```fsharp
-Eff.map       : Eff<'T, 'Env> -> ('T -> 'U) -> Eff<'U, 'Env>
-Eff.bind      : Eff<'T, 'Env> -> ('T -> Eff<'U, 'Env>) -> Eff<'U, 'Env>
-Eff.catch     : Eff<'T, 'Env> -> (exn -> Eff<'T, 'Env>) -> Eff<'T, 'Env>
-Eff.mapError  : Eff<'T, 'Env> -> (exn -> exn) -> Eff<'T, 'Env>
-Eff.ensure    : Eff<'T, 'Env> -> ('T -> bool) -> Eff<'T, 'Env>
+open EffFs.Core
+
+type ILogger =
+  abstract Debug: string -> unit
+
+type HasLogger =
+  abstract Logger: ILogger
+
+let log msg =
+  Eff.read (fun (env: #HasLogger) -> env.Logger.Debug msg)
+
+let program =
+  eff {
+    do! log "starting"
+    let! value = Ok 41
+    return value + 1
+  }
 ```
 
-### Environment helpers
+This example uses the current design:
 
-Exact names remain open, but conceptually:
-
-```fsharp
-Eff.ask       : Eff<'Env, 'Env>
-Eff.service   : Eff<'Service, 'Env> when 'Env :> IHasServiceLike
-Eff.provide   : 'Env -> Eff<'T, 'Env> -> Eff<'T, unit>   // or direct runner-oriented variant
-Eff.local     : ('OuterEnv -> 'InnerEnv) -> Eff<'T, 'InnerEnv> -> Eff<'T, 'OuterEnv>
-```
-
----
-
-## Performance Priorities
-
-Primary performance principles:
-
-- `Pure` path must be as cheap as possible
-- `Err` path must stay simple
-- direct lazy leaf cases should avoid extra wrapper allocations
-- `Pending` should allocate only when composition genuinely needs erased state
-- avoid large internal error unions
-- prefer normalization of source types early
-- do not expose `ValueTask` directly as the public pending representation
-- avoid unnecessary closures/thunks in hot paths
-- laziness should exist at the effect boundary, not as pointless overhead everywhere
-
-### Hot-path guidance
-
-`Eff` is intended for orchestration and effect boundaries, not for tight inner loops.
-
-- keep simulation, numeric, and per-frame hot-path logic as plain F# functions
-- embed those pure functions inside an upstream `Eff` workflow
-- avoid building heap-backed pending chains in performance-critical inner loops
-
-### Main expected costs
-
-The likely hotspots are:
-
-- closure allocation
-- boxed state for composed `Pending` work
-- task/async/promise interop
-- async state machine churn
-- delegate invocation in pending steps
-- large/copy-heavy value types
-
-Branching on the specialized DU cases is acceptable and part of the chosen design.
-
----
-
-## Open Questions
-
-These were left intentionally open or only partially decided:
-
-1. Exact internal encoding of short-circuit behavior for `ensure`/guard-like helpers
-   - public API direction is chosen
-   - internal control mechanism remains open
-
-2. Exact promise interop API on Fable
-
-3. Whether to expose both `runTask` and `runValueTask`
-   - `runTask` is clearly desired
-   - `runValueTask` remains optional/advanced
-
----
-
-## Summary of Chosen Decisions
-
-Chosen:
-
-- `Eff<'T, 'Env>`
-- private struct DU
-- struct DU
-- direct DU cases for `Delay`, `Thunk`, `Tsk`, and `Asy`
-- `Pending of obj * Step` for composed runtime state
-- errors represented as `exn`
-- effects lazy by default
-- laziness should live at effect boundaries, while terminal cases stay strict
-- `Task`/`Async` constructors should take thunks
-- `ValueTask` is accepted at the API boundary and currently normalized into the task path
-- no extra public `Exit` branch
-- DI via small capability interfaces is preferred
-- multiple source types can participate in `let!` by normalization into `Eff`
-- `runSync` is valid at top-level boundaries
-- defer/finally/bracket-style cleanup should exist
-
-Rejected:
-
-- large internal error union as the primary model
-- giant monolithic env as the only DI story
-- public `Pending of ValueTask<Eff<...>>`
-- extra public DU branch just for early exit
+- typed managed errors
+- explicit environment reads
+- lazy execution until a runner interprets the effect
