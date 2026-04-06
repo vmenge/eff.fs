@@ -1,6 +1,7 @@
 namespace EffFs.EffectGen.Tests
 
 open System
+open System.Collections.Generic
 open System.Diagnostics
 open System.IO
 open System.Threading.Tasks
@@ -55,11 +56,27 @@ module Harness =
     let projectName = Path.GetFileNameWithoutExtension(projectPath)
     Path.Combine(projectDirectory, "bin", "Debug", "net10.0", $"{projectName}.dll")
 
-  let private ensureProjectBuild (projectPath: string) = task {
-    let! result = runDotnet None $"build \"{projectPath}\" --nologo -m:1"
+  let private prerequisiteBuilds = Dictionary<string, Task>()
+  let private prerequisiteBuildsLock = obj()
 
-    if result.ExitCode <> 0 then
-      failwith $"failed to build prerequisite project {projectPath}{System.Environment.NewLine}{result.Output}"
+  let private ensureProjectBuild (projectPath: string) = task {
+    let buildTask =
+      lock prerequisiteBuildsLock (fun () ->
+        match prerequisiteBuilds.TryGetValue(projectPath) with
+        | true, existing -> existing
+        | false, _ ->
+            let started =
+              task {
+                let! result = runDotnet None $"build \"{projectPath}\" --nologo -m:1"
+
+                if result.ExitCode <> 0 then
+                  failwith $"failed to build prerequisite project {projectPath}{System.Environment.NewLine}{result.Output}"
+              } :> Task
+
+            prerequisiteBuilds[projectPath] <- started
+            started)
+
+    do! buildTask
   }
 
   let buildProject (projectPath: string) : Task<BuildResult> = task {

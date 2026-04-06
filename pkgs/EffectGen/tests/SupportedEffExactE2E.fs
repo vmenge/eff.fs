@@ -24,20 +24,23 @@ module SupportedEffExactE2E =
     with :? DirectoryNotFoundException ->
       ()
 
+  let private builtFixture =
+    lazy (
+      task {
+        cleanupGeneratedDirectory ()
+        return! buildProject fixtureProject
+      })
+
   let tests =
     testSequenced <| testList "SupportedEffExactE2E" [
       testTask "supported Eff exact fixture builds with generated wrappers in the same build" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully once exact Eff generation exists. Output:{System.Environment.NewLine}{result.Output}"
       }
 
       testTask "supported Eff exact generated output flattens nested Eff returns" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully before inspecting generated output. Output:{System.Environment.NewLine}{result.Output}"
 
@@ -52,9 +55,7 @@ module SupportedEffExactE2E =
       }
 
       testTask "supported Eff exact fixture executes generated wrappers at runtime" {
-        cleanupGeneratedDirectory ()
-
-        let! buildResult = buildProject fixtureProject
+        let! buildResult = builtFixture.Value
         Expect.equal buildResult.ExitCode 0 $"fixture {fixtureName} should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
         let! runResult = runBuiltExpression fixtureProject "SupportedEffExactRed.Program.run ()"

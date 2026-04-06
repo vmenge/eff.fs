@@ -24,21 +24,24 @@ module SupportedSyncE2E =
     with :? DirectoryNotFoundException ->
       ()
 
+  let private builtFixture =
+    lazy (
+      task {
+        cleanupGeneratedDirectory ()
+        return! buildProject fixtureProject
+      })
+
   let tests =
     testSequenced <| testList "SupportedSyncE2E" [
       testTask "supported sync fixture builds with generated wrappers in the same build" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully once sync generation exists. Output:{System.Environment.NewLine}{result.Output}"
         Expect.isTrue (Directory.Exists(generatedDirectory)) $"fixture {fixtureName} should emit generated files into {generatedDirectory}"
       }
 
       testTask "supported sync generated output uses naming and result normalization from the spec" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully before inspecting generated output. Output:{System.Environment.NewLine}{result.Output}"
 
@@ -66,9 +69,7 @@ module SupportedSyncE2E =
       }
 
       testTask "supported sync fixture executes generated wrappers at runtime" {
-        cleanupGeneratedDirectory ()
-
-        let! buildResult = buildProject fixtureProject
+        let! buildResult = builtFixture.Value
         Expect.equal buildResult.ExitCode 0 $"fixture {fixtureName} should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
         let! runResult = runBuiltExpression fixtureProject "SupportedSyncRed.Program.run ()"

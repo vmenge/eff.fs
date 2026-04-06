@@ -24,20 +24,23 @@ module SupportedEffProvideFromE2E =
     with :? DirectoryNotFoundException ->
       ()
 
+  let private builtFixture =
+    lazy (
+      task {
+        cleanupGeneratedDirectory ()
+        return! buildProject fixtureProject
+      })
+
   let tests =
     testSequenced <| testList "SupportedEffProvideFromE2E" [
       testTask "supported Eff provideFrom fixture builds with generated wrappers in the same build" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully once mechanical Eff adaptation exists. Output:{System.Environment.NewLine}{result.Output}"
       }
 
       testTask "supported Eff provideFrom generated output upcasts through provideFrom before flattening" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully before inspecting generated output. Output:{System.Environment.NewLine}{result.Output}"
 
@@ -54,9 +57,7 @@ module SupportedEffProvideFromE2E =
       }
 
       testTask "supported Eff provideFrom fixture executes generated wrappers at runtime" {
-        cleanupGeneratedDirectory ()
-
-        let! buildResult = buildProject fixtureProject
+        let! buildResult = builtFixture.Value
         Expect.equal buildResult.ExitCode 0 $"fixture {fixtureName} should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
         let! runResult = runBuiltExpression fixtureProject "SupportedEffProvideFromRed.Program.run ()"

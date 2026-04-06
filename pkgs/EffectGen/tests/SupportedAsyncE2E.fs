@@ -24,21 +24,24 @@ module SupportedAsyncE2E =
     with :? DirectoryNotFoundException ->
       ()
 
+  let private builtFixture =
+    lazy (
+      task {
+        cleanupGeneratedDirectory ()
+        return! buildProject fixtureProject
+      })
+
   let tests =
     testSequenced <| testList "SupportedAsyncE2E" [
       testTask "supported async fixture builds with generated wrappers in the same build" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully once async generation exists. Output:{System.Environment.NewLine}{result.Output}"
         Expect.isTrue (Directory.Exists(generatedDirectory)) $"fixture {fixtureName} should emit generated files into {generatedDirectory}"
       }
 
       testTask "supported async generated output normalizes Task Async and ValueTask through Eff helpers" {
-        cleanupGeneratedDirectory ()
-
-        let! result = buildProject fixtureProject
+        let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully before inspecting generated output. Output:{System.Environment.NewLine}{result.Output}"
 
@@ -59,9 +62,7 @@ module SupportedAsyncE2E =
       }
 
       testTask "supported async fixture executes generated wrappers at runtime" {
-        cleanupGeneratedDirectory ()
-
-        let! buildResult = buildProject fixtureProject
+        let! buildResult = builtFixture.Value
         Expect.equal buildResult.ExitCode 0 $"fixture {fixtureName} should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
         let! runResult = runBuiltExpression fixtureProject "SupportedAsyncRed.Program.run ()"

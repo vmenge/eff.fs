@@ -30,6 +30,13 @@ module ExampleE2E =
     with :? DirectoryNotFoundException ->
       ()
 
+  let private builtExample =
+    lazy (
+      task {
+        cleanupDirectory generatedDirectory
+        return! buildProject exampleProject
+      })
+
   let tests =
     testSequenced <| testList "ExampleE2E" [
       testTask "example project builds as an EffectGen consumer in the same build" {
@@ -38,9 +45,7 @@ module ExampleE2E =
         Expect.isFalse (projectText.Contains("EffectGen.props")) "the example should not manually import EffectGen.props"
         Expect.isFalse (projectText.Contains("EffectGen.targets")) "the example should not manually import EffectGen.targets"
 
-        cleanupDirectory generatedDirectory
-
-        let! result = buildProject exampleProject
+        let! result = builtExample.Value
 
         Expect.equal result.ExitCode 0 $"example project should build successfully once EffectGen consumer wiring exists. Output:{System.Environment.NewLine}{result.Output}"
         Expect.isTrue (Directory.Exists(generatedDirectory)) $"example project should emit generated files into {generatedDirectory}"
@@ -56,9 +61,7 @@ module ExampleE2E =
       }
 
       testTask "example project executes generated wrappers at runtime" {
-        cleanupDirectory generatedDirectory
-
-        let! buildResult = buildProject exampleProject
+        let! buildResult = builtExample.Value
         Expect.equal buildResult.ExitCode 0 $"example project should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
         let! runResult = runBuiltExpression exampleProject "EffFs.Examples.Program.run ()"
