@@ -147,25 +147,31 @@ and private BracketReleaseFrame<'r, 'e, 'env>
       ContinueWithExit(BoxedExn ex, rest)
 
   override _.HandleOk(value, rest) =
-    runCleanup rest (function
+    runCleanup
+      rest
+      (function
       | BoxedOk _ -> ContinueWithExit(BoxedOk value, rest)
       | BoxedErr err -> ContinueWithExit(BoxedErr err, rest)
       | BoxedExn ex -> ContinueWithExit(BoxedExn ex, rest)
-    )
+      )
 
   override _.HandleErr(err, rest) =
-    runCleanup rest (function
+    runCleanup
+      rest
+      (function
       | BoxedOk _ -> ContinueWithExit(BoxedErr err, rest)
       | BoxedErr cleanupErr -> ContinueWithExit(BoxedErr cleanupErr, rest)
       | BoxedExn ex -> ContinueWithExit(BoxedExn ex, rest)
-    )
+      )
 
   override _.HandleExn(ex, rest) =
-    runCleanup rest (function
+    runCleanup
+      rest
+      (function
       | BoxedOk _ -> ContinueWithExit(BoxedExn ex, rest)
       | BoxedErr cleanupErr -> ContinueWithExit(BoxedErr cleanupErr, rest)
       | BoxedExn cleanupExn -> ContinueWithExit(BoxedExn cleanupExn, rest)
-    )
+      )
 
 and private BracketAcquireFrame<'r, 't, 'e, 'env>
   (usefn: 'r -> Eff<'t, 'e, 'env>, release: 'r -> Eff<unit, 'e, 'env>) =
@@ -419,8 +425,7 @@ module Eff =
     })
     |> bind ofResult
 
-  let bracket acquire release usefn =
-    Eff.Node(Bracket(acquire, usefn, release))
+  let bracket acquire release usefn = Eff.Node(Bracket(acquire, usefn, release))
 
   let tap
     (f: 't -> Eff<'k, 'e, 'env>)
@@ -446,6 +451,12 @@ module Eff =
     (eff: Eff<'t, 'e, 'env>)
     : Eff<'t, 'e, 'env> =
     orElseWith (fun _ -> fallback) eff
+
+  let orRaise eff : Eff<_, unit, _> =
+    eff |> orElseWith (fun e -> Thunk(fun () -> raise (Report.make e)))
+
+  let orRaiseWith f eff : Eff<_, unit, _> =
+    eff |> orElseWith (fun e -> Thunk(fun () -> raise (f e)))
 
   let private boxedEff (eff: Eff<'t, 'e, 'env>) : BoxedEff<'env> =
     BoxedEff<'t, 'e, 'env>(eff) :> BoxedEff<'env>
@@ -521,17 +532,18 @@ module Eff =
           finished <- true
       | Eff.Thunk thunk ->
         try
-          result <- ValueSome(unwind stepper (BoxedOk(box (thunk ()))) currentFrames)
+          result <-
+            ValueSome(unwind stepper (BoxedOk(box (thunk ()))) currentFrames)
         with ex ->
           result <- ValueSome(unwind stepper (BoxedExn ex) currentFrames)
+
         finished <- true
       | Eff.Task tsk ->
         try
-          let awaited =
-            task {
-              let! value = tsk ()
-              return box value
-            }
+          let awaited = task {
+            let! value = tsk ()
+            return box value
+          }
 
           result <-
             ValueSome(
@@ -549,7 +561,8 @@ module Eff =
         finished <- true
       | Eff.Read read ->
         try
-          result <- ValueSome(unwind stepper (BoxedOk(box (read env))) currentFrames)
+          result <-
+            ValueSome(unwind stepper (BoxedOk(box (read env))) currentFrames)
         with ex ->
           result <- ValueSome(unwind stepper (BoxedExn ex) currentFrames)
 
