@@ -1,4 +1,4 @@
-namespace EffFs.Gen
+namespace EffSharp.Gen
 
 open System
 open FSharp.Compiler.Syntax

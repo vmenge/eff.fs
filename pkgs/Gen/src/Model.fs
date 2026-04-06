@@ -1,4 +1,4 @@
-namespace EffFs.Gen
+namespace EffSharp.Gen
 
 type Parameter = {
   Name: string

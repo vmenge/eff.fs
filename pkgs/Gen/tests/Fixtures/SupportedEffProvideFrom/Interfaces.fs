@@ -1,7 +1,7 @@
 namespace SupportedEffProvideFromRed
 
-open EffFs.Core
-open EffFs.Gen
+open EffSharp.Core
+open EffSharp.Gen
 
 type IRuntimeEnv =
   abstract RuntimeService: IRuntimeService

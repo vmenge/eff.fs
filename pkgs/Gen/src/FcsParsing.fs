@@ -1,4 +1,4 @@
-namespace EffFs.Gen
+namespace EffSharp.Gen
 
 open System.IO
 open FSharp.Compiler.CodeAnalysis

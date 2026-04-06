@@ -1,4 +1,4 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System
 open System.IO

@@ -1,6 +1,6 @@
 namespace SupportedSyncRed
 
-open EffFs.Core
+open EffSharp.Core
 
 module Usage =
   let logProgram () : Eff<unit, exn, #ELogger> = ELogger.debug "hello"

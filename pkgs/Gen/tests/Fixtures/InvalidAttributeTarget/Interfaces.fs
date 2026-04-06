@@ -1,6 +1,6 @@
 namespace Gen.Fixtures.InvalidAttributeTarget
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type BadRecord = { Value: int }

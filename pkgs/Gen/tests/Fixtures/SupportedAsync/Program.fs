@@ -2,7 +2,7 @@ module SupportedAsyncRed.Program
 
 open System
 open System.Threading.Tasks
-open EffFs.Core
+open EffSharp.Core
 
 type Http() =
   interface IHttp with

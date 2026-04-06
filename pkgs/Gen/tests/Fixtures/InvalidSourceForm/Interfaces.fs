@@ -1,6 +1,6 @@
 namespace Gen.Fixtures.InvalidSourceForm
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IEmpty = interface end

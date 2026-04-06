@@ -1,6 +1,6 @@
 namespace QualifiedReturnTypesRed
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IParser =
@@ -23,4 +23,4 @@ type IFileSystem =
 
 [<Effect>]
 type IRuntime =
-  abstract Spawn: Job -> EffFs.Core.Eff<JobHandle<JobResult>, SpawnError, unit>
+  abstract Spawn: Job -> EffSharp.Core.Eff<JobHandle<JobResult>, SpawnError, unit>

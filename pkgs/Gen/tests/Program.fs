@@ -1,5 +1,5 @@
 open Expecto
-open EffFs.Gen.Tests
+open EffSharp.Gen.Tests
 
 [<EntryPoint>]
 let main argv =

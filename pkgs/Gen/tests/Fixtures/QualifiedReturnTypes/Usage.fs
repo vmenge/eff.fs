@@ -1,6 +1,6 @@
 namespace QualifiedReturnTypesRed
 
-open EffFs.Core
+open EffSharp.Core
 
 module Usage =
   let parseProgram () : Eff<int, ParseError, #EParser> = EParser.parse "42"

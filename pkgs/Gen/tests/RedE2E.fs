@@ -1,4 +1,4 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System.IO
 open Expecto
@@ -17,7 +17,7 @@ module RedE2E =
     Expect.isFalse
       (result.Output.Contains("MSB9008")
        || result.Output.Contains("does not exist")
-       || result.Output.Contains("The namespace or module 'EffFs' is not defined")
+       || result.Output.Contains("The namespace or module 'EffSharp' is not defined")
        || result.Output.Contains("The type 'Effect' is not defined")
        || result.Output.Contains("The type 'Eff' is not defined"))
       $"fixture {fixtureName} should have valid plumbing; the red state should come from missing generated wrappers"
@@ -40,7 +40,7 @@ module RedE2E =
     Expect.isFalse
       (result.Output.Contains("MSB9008")
        || result.Output.Contains("does not exist")
-       || result.Output.Contains("The namespace or module 'EffFs' is not defined")
+       || result.Output.Contains("The namespace or module 'EffSharp' is not defined")
        || result.Output.Contains("The type 'Effect' is not defined")
        || result.Output.Contains("The type 'Eff' is not defined"))
       $"fixture {fixtureName} should fail because its generation behavior is not implemented yet, not because of broken plumbing"

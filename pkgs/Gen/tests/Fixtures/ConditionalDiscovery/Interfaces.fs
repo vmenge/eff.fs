@@ -1,6 +1,6 @@
 namespace ConditionalDiscoveryRed
 
-open EffFs.Gen
+open EffSharp.Gen
 
 #if EFFECTGEN_DISCOVERY
 [<Effect>]

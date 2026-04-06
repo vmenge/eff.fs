@@ -1,9 +1,9 @@
-namespace EffFs.Core.Tests
+namespace EffSharp.Core.Tests
 
 module ReportCE =
   open Expecto
   open System.Threading.Tasks
-  open EffFs.Core
+  open EffSharp.Core
 
   let tests =
     testList "ReportCE" [

@@ -1,4 +1,4 @@
-namespace EffFs.Core.Tests
+namespace EffSharp.Core.Tests
 
 module CE =
   open System
@@ -6,7 +6,7 @@ module CE =
   open System.Collections.Generic
   open Expecto
   open System.Threading.Tasks
-  open EffFs.Core
+  open EffSharp.Core
 
   type ForProbe(items: int list) =
     let items = List.toArray items

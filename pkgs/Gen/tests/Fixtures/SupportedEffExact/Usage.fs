@@ -1,6 +1,6 @@
 namespace SupportedEffExactRed
 
-open EffFs.Core
+open EffSharp.Core
 
 module Usage =
   let spawnProgram () : Eff<JobHandle<JobResult>, SpawnError, #ERuntime> =

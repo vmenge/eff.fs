@@ -1,4 +1,4 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System
 open System.IO
@@ -9,7 +9,7 @@ module ExampleE2E =
   open Harness
 
   let private exampleProject =
-    Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "Examples", "src", "EffFs.Examples.fsproj")
+    Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "Examples", "src", "EffSharp.Examples.fsproj")
 
   let private exampleDirectory =
     Path.GetDirectoryName(exampleProject)
@@ -64,7 +64,7 @@ module ExampleE2E =
         let! buildResult = builtExample.Value
         Expect.equal buildResult.ExitCode 0 $"example project should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 
-        let! runResult = runBuiltFunction exampleProject "EffFs.Examples.Program" "run"
+        let! runResult = runBuiltFunction exampleProject "EffSharp.Examples.Program" "run"
         Expect.equal runResult.ExitCode 0 $"example project should run successfully. Output:{System.Environment.NewLine}{runResult.Output}"
         Expect.stringContains runResult.Output "Hello, Gen." "the example should print the greeting produced through the generated wrapper"
       }

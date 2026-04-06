@@ -1,4 +1,4 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System.IO
 open Expecto
@@ -33,7 +33,7 @@ module DiagnosticsE2E =
     Expect.isFalse
       (result.Output.Contains("MSB9008")
        || result.Output.Contains("does not exist")
-       || result.Output.Contains("The namespace or module 'EffFs' is not defined")
+       || result.Output.Contains("The namespace or module 'EffSharp' is not defined")
        || result.Output.Contains("The type 'Effect' is not defined"))
       $"fixture {fixtureName} should fail because of generator validation, not broken fixture plumbing"
 

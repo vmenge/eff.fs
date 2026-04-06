@@ -1,6 +1,6 @@
 namespace SupportedSyncRed
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type ILogger =

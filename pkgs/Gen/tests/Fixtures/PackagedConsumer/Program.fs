@@ -1,7 +1,7 @@
 module PackagedConsumer.Program
 
 open System
-open EffFs.Core
+open EffSharp.Core
 
 type ConsoleGreeter() =
   interface IGreeter with

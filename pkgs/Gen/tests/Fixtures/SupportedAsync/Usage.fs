@@ -1,6 +1,6 @@
 namespace SupportedAsyncRed
 
-open EffFs.Core
+open EffSharp.Core
 
 module Usage =
   let fetchProgram () : Eff<Response, exn, #EHttp> = EHttp.fetch "/users"

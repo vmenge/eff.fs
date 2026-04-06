@@ -4,7 +4,7 @@
 
 Generate `Eff` wrappers from `[<Effect>]` interfaces so users can define effect capabilities as ordinary F# interfaces and consume them as `Eff` values inside programs and computation expressions.
 
-The generated code must target the public `EffFs.Core.Eff` API. It must not depend on runtime internals such as `EffRuntime` or `EffNodes`.
+The generated code must target the public `EffSharp.Core.Eff` API. It must not depend on runtime internals such as `EffRuntime` or `EffNodes`.
 
 ---
 
@@ -327,7 +327,7 @@ The generator must not expose:
 - internal `Node` types
 - boxed runtime machinery
 
-Generated code should depend only on the public API in `EffFs.Core`.
+Generated code should depend only on the public API in `EffSharp.Core`.
 
 ---
 

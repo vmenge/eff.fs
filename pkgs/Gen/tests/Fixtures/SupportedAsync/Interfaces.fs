@@ -1,7 +1,7 @@
 namespace SupportedAsyncRed
 
 open System.Threading.Tasks
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IHttp =

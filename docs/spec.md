@@ -387,7 +387,7 @@ This repository does not currently implement:
 ## Minimal Example
 
 ```fsharp
-open EffFs.Core
+open EffSharp.Core
 
 type ILogger =
   abstract Debug: string -> unit

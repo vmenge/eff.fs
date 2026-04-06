@@ -1,4 +1,4 @@
-namespace EffFs.Core
+namespace EffSharp.Core
 
 type Report(o: obj, msg: string, ?inner: exn) =
   inherit System.Exception(msg, defaultArg inner null)

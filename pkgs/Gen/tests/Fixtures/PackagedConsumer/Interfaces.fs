@@ -1,6 +1,6 @@
 namespace PackagedConsumer
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IGreeter =

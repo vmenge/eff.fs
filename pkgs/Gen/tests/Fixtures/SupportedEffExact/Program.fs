@@ -1,7 +1,7 @@
 module SupportedEffExactRed.Program
 
 open System
-open EffFs.Core
+open EffSharp.Core
 
 type Runtime() =
   interface IRuntime with

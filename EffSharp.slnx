@@ -19,6 +19,6 @@
   </Folder>
   <Folder Name="/pkgs/Examples/" />
   <Folder Name="/pkgs/Examples/src/">
-    <Project Path="pkgs/Examples/src/EffFs.Examples.fsproj" />
+    <Project Path="pkgs/Examples/src/EffSharp.Examples.fsproj" />
   </Folder>
 </Solution>

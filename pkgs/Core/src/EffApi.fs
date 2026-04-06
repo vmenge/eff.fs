@@ -1,4 +1,4 @@
-namespace EffFs.Core
+namespace EffSharp.Core
 
 open System.Threading.Tasks
 

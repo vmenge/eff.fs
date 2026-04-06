@@ -1,6 +1,6 @@
 module SupportedSyncRed.Program
 
-open EffFs.Core
+open EffSharp.Core
 
 type Logger() =
   let mutable messages = []

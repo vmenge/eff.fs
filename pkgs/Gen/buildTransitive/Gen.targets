@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <UsingTask
-    TaskName="EffFs.Gen.GenerateEffectFilesTask"
+    TaskName="EffSharp.Gen.GenerateEffectFilesTask"
     AssemblyFile="$(GenTaskAssemblyPath)"
     Runtime="NET"
     Architecture="*"
@@ -13,7 +13,7 @@
     Condition="'$(GenEnabled)' == 'true' and Exists('$(GenTaskAssemblyPath)') and '$(MSBuildRuntimeType)' == 'Full'" />
 
   <UsingTask
-    TaskName="EffFs.Gen.GenerateEffectFilesTask"
+    TaskName="EffSharp.Gen.GenerateEffectFilesTask"
     AssemblyFile="$(GenTaskAssemblyPath)"
     Runtime="NET"
     Architecture="*"

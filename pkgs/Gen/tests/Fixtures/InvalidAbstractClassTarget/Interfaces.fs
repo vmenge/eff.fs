@@ -1,6 +1,6 @@
 namespace Gen.Fixtures.InvalidAbstractClassTarget
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<AbstractClass>]
 [<Effect>]

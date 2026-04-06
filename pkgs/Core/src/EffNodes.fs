@@ -1,4 +1,4 @@
-namespace EffFs.Core
+namespace EffSharp.Core
 
 module internal EffNodes =
   type Map<'src, 't, 'e, 'env>

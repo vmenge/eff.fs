@@ -1,4 +1,4 @@
-namespace EffFs.Core.Tests
+namespace EffSharp.Core.Tests
 
 [<AutoOpen>]
 module Prelude =

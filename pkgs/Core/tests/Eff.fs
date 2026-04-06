@@ -1,8 +1,8 @@
-namespace EffFs.Core.Tests
+namespace EffSharp.Core.Tests
 
 module Eff =
   open Expecto
-  open EffFs.Core
+  open EffSharp.Core
   open System.Diagnostics
   open System.IO
   open System.Threading

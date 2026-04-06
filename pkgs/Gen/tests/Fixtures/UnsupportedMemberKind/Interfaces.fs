@@ -1,6 +1,6 @@
 namespace Gen.Fixtures.UnsupportedMemberKind
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IThing =

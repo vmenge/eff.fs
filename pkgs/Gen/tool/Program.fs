@@ -1,8 +1,8 @@
-module EffFs.Gen.Tool.Program
+module EffSharp.Gen.Tool.Program
 
 open System
 open System.IO
-open EffFs.Gen
+open EffSharp.Gen
 
 let private fail message =
   eprintfn "%s" message

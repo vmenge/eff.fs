@@ -1,4 +1,4 @@
-namespace EffFs.Gen
+namespace EffSharp.Gen
 
 open System.Text
 
@@ -104,7 +104,7 @@ module Emission =
         appendLine builder ""
     | None -> ()
 
-    appendLine builder "open EffFs.Core"
+    appendLine builder "open EffSharp.Core"
     appendLine builder ""
     appendLine builder $"type {effectInterface.EnvironmentName} ="
 

@@ -1,6 +1,6 @@
-namespace EffFs.Examples
+namespace EffSharp.Examples
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type IGreeter =

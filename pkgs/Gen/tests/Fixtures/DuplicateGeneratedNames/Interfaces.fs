@@ -1,6 +1,6 @@
 namespace Gen.Fixtures.DuplicateGeneratedNames
 
-open EffFs.Gen
+open EffSharp.Gen
 
 [<Effect>]
 type ILogger =

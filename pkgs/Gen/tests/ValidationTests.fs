@@ -1,8 +1,8 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System.IO
 open Expecto
-open EffFs.Gen
+open EffSharp.Gen
 
 module ValidationTests =
   let private fixturePath fixtureName =

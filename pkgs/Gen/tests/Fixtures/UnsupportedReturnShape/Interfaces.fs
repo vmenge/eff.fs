@@ -1,7 +1,7 @@
 namespace Gen.Fixtures.UnsupportedReturnShape
 
-open EffFs.Core
-open EffFs.Gen
+open EffSharp.Core
+open EffSharp.Gen
 
 type NeededEnv = { Value: int }
 

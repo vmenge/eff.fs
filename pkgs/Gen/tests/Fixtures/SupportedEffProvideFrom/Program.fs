@@ -1,7 +1,7 @@
 module SupportedEffProvideFromRed.Program
 
 open System
-open EffFs.Core
+open EffSharp.Core
 
 type RuntimeService() =
   interface IRuntimeService with

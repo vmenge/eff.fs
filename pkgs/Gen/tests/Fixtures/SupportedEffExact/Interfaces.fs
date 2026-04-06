@@ -1,7 +1,7 @@
 namespace SupportedEffExactRed
 
-open EffFs.Core
-open EffFs.Gen
+open EffSharp.Core
+open EffSharp.Gen
 
 [<Effect>]
 type IRuntime =

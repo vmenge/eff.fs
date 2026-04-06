@@ -1,4 +1,4 @@
-namespace EffFs.Gen.Tests
+namespace EffSharp.Gen.Tests
 
 open System.IO
 open Expecto
@@ -14,7 +14,7 @@ module ScaffoldTests =
     Path.Combine(effectGenRoot, "src", "Gen.fsproj")
 
   let private solutionPath =
-    Path.Combine(repoRoot, "EffFs.slnx")
+    Path.Combine(repoRoot, "EffSharp.slnx")
 
   let private readAllText path = File.ReadAllText(path)
 
