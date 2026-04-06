@@ -133,6 +133,60 @@ and private DeferFrame<'e, 'env>(cleanup: Eff<unit, 'e, 'env>) =
       | BoxedExn cleanupExn -> ContinueWithExit(BoxedExn cleanupExn, rest)
     )
 
+and private BracketReleaseFrame<'r, 'e, 'env>
+  (resource: 'r, release: 'r -> Eff<unit, 'e, 'env>) =
+  inherit Frame<'env>()
+
+  let runCleanup rest cont =
+    try
+      RunCleanup(
+        (BoxedEff<unit, 'e, 'env>(release resource) :> BoxedEff<'env>),
+        cont
+      )
+    with ex ->
+      ContinueWithExit(BoxedExn ex, rest)
+
+  override _.HandleOk(value, rest) =
+    runCleanup rest (function
+      | BoxedOk _ -> ContinueWithExit(BoxedOk value, rest)
+      | BoxedErr err -> ContinueWithExit(BoxedErr err, rest)
+      | BoxedExn ex -> ContinueWithExit(BoxedExn ex, rest)
+    )
+
+  override _.HandleErr(err, rest) =
+    runCleanup rest (function
+      | BoxedOk _ -> ContinueWithExit(BoxedErr err, rest)
+      | BoxedErr cleanupErr -> ContinueWithExit(BoxedErr cleanupErr, rest)
+      | BoxedExn ex -> ContinueWithExit(BoxedExn ex, rest)
+    )
+
+  override _.HandleExn(ex, rest) =
+    runCleanup rest (function
+      | BoxedOk _ -> ContinueWithExit(BoxedExn ex, rest)
+      | BoxedErr cleanupErr -> ContinueWithExit(BoxedErr cleanupErr, rest)
+      | BoxedExn cleanupExn -> ContinueWithExit(BoxedExn cleanupExn, rest)
+    )
+
+and private BracketAcquireFrame<'r, 't, 'e, 'env>
+  (usefn: 'r -> Eff<'t, 'e, 'env>, release: 'r -> Eff<unit, 'e, 'env>) =
+  inherit Frame<'env>()
+
+  override _.HandleOk(value, rest) =
+    let resource = unbox<'r> value
+
+    try
+      ContinueWithEff(
+        (BoxedEff<'t, 'e, 'env>(usefn resource) :> BoxedEff<'env>),
+        (BracketReleaseFrame<'r, 'e, 'env>(resource, release) :> Frame<'env>)
+        :: rest
+      )
+    with ex ->
+      (BracketReleaseFrame<'r, 'e, 'env>(resource, release) :> Frame<'env>)
+        .HandleExn(ex, rest)
+
+  override _.HandleErr(err, rest) = ContinueWithExit(BoxedErr err, rest)
+  override _.HandleExn(ex, rest) = ContinueWithExit(BoxedExn ex, rest)
+
 and private Map<'src, 't, 'e, 'env>
   (source: Eff<'src, 'e, 'env>, mapper: 'src -> 't) =
   inherit Node<'t, 'e, 'env>()
@@ -196,6 +250,22 @@ and private Defer<'t, 'e, 'env>
       Continue(
         (BoxedEff<'t, 'e, 'env>(body) :> BoxedEff<'env>),
         (DeferFrame<'e, 'env>(cleanup) :> Frame<'env>) :: frames
+      )
+
+and private Bracket<'r, 't, 'e, 'env>
+  (
+    acquire: Eff<'r, 'e, 'env>,
+    usefn: 'r -> Eff<'t, 'e, 'env>,
+    release: 'r -> Eff<unit, 'e, 'env>
+  ) =
+  inherit Node<'t, 'e, 'env>()
+
+  interface INodeRuntime<'env> with
+    member _.Enter(frames) =
+      Continue(
+        (BoxedEff<'r, 'e, 'env>(acquire) :> BoxedEff<'env>),
+        (BracketAcquireFrame<'r, 't, 'e, 'env>(usefn, release) :> Frame<'env>)
+        :: frames
       )
 
 [<RequireQualifiedAccess>]
@@ -350,10 +420,7 @@ module Eff =
     |> bind ofResult
 
   let bracket acquire release usefn =
-    acquire
-    |> bind (fun resource ->
-      suspend (fun () -> usefn resource) |> defer (release resource)
-    )
+    Eff.Node(Bracket(acquire, usefn, release))
 
   let tap
     (f: 't -> Eff<'k, 'e, 'env>)

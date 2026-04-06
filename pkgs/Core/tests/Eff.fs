@@ -452,6 +452,34 @@ module Eff =
           "should still release when use throws synchronously"
       }
 
+      testTask "bracket release error overrides success" {
+        let! result =
+          Eff.bracket
+            (Pure 42)
+            (fun _ -> Err "cleanup failed")
+            (fun resource -> Pure(resource + 1))
+          |> Eff.runTask ()
+
+        Expect.equal
+          result
+          (Exit.Err "cleanup failed")
+          "cleanup failure should override the successful body result"
+      }
+
+      testTask "bracket release error overrides body error" {
+        let! result =
+          Eff.bracket
+            (Pure 42)
+            (fun _ -> Err "cleanup failed")
+            (fun _ -> Err "body failed")
+          |> Eff.runTask ()
+
+        Expect.equal
+          result
+          (Exit.Err "cleanup failed")
+          "cleanup failure should override the body error"
+      }
+
       testTask "deep bind chains stay stack-safe" {
         let depth = 100_000
         let mutable program: Eff<int, unit, unit> = Eff.suspend (fun () -> Pure 0)
