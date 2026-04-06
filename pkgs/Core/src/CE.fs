@@ -5,11 +5,11 @@ open System.Threading.Tasks
 [<AutoOpen>]
 module CE =
   type EffBuilderBase() =
-    member _.Yield(value: 't) : Eff<'t, 'e, 'env> = Pure value
+    member _.Yield(value: 't) : Eff<'t, 'e, 'env> = Eff.Pure value
 
-    member _.Return(value: 't) : Eff<'t, 'e, 'env> = Pure value
+    member _.Return(value: 't) : Eff<'t, 'e, 'env> = Eff.Pure value
 
-    member _.Zero() : Eff<unit, 'e, 'env> = Pure ()
+    member _.Zero() : Eff<unit, 'e, 'env> = Eff.Pure ()
 
     member _.Delay(f: unit -> Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> =
       Eff.suspend f
@@ -23,7 +23,7 @@ module CE =
       (resource: 'r, binder: 'r -> Eff<'t, 'e, 'env>)
       : Eff<'t, 'e, 'env> when 'r :> System.IDisposable =
       Eff.bracket
-        (Pure resource)
+        (Eff.Pure resource)
         (fun r ->
           Eff.thunk (fun () ->
             match box r with
@@ -36,7 +36,7 @@ module CE =
       (guard: unit -> bool, body: Eff<unit, 'e, 'env>)
       : Eff<unit, 'e, 'env> =
       if not (guard ()) then
-        Pure ()
+        Eff.Pure ()
       else
         Eff.bind (fun () -> this.While(guard, body)) body
 
@@ -53,7 +53,7 @@ module CE =
             if enumerator.MoveNext() then
               Eff.bind (fun () -> loop ()) (body enumerator.Current)
             else
-              Pure ()
+              Eff.Pure ()
           )
 
         Eff.defer cleanup (loop ())
@@ -66,7 +66,7 @@ module CE =
         [<ProjectionParameter>] cleanup: 't -> Eff<unit, 'e, 'env>
       ) : Eff<'t, 'e, 'env> =
       state
-      |> Eff.bind (fun vspace -> Eff.defer (cleanup vspace) (Pure vspace))
+      |> Eff.bind (fun vspace -> Eff.defer (cleanup vspace) (Eff.Pure vspace))
 
     [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
     member _.Defer
@@ -76,7 +76,7 @@ module CE =
       ) : Eff<'t, 'e, 'env> =
       state
       |> Eff.bind (fun vspace ->
-        Eff.defer (Eff.thunk (cleanup vspace)) (Pure vspace)
+        Eff.defer (Eff.thunk (cleanup vspace)) (Eff.Pure vspace)
       )
 
     member _.Source(sequence: seq<'t>) : seq<'t> = sequence

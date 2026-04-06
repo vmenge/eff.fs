@@ -87,7 +87,7 @@ module CE =
         let! value =
           eff {
             let a = 1
-            let! b = Pure 2
+            let! b = Eff.Pure 2
             let! c = Ok 3
             let! d = Some 4
             let! e = task { return 5 }
@@ -108,7 +108,7 @@ module CE =
       }
 
       testTask "return! eff works" {
-        let! value = eff { return! Pure 5 } |> Eff.runTask ()
+        let! value = eff { return! Eff.Pure 5 } |> Eff.runTask ()
 
         Expect.equal value (Exit.Ok 5) "should return from Eff directly"
       }
@@ -188,7 +188,7 @@ module CE =
           "should resolve thrown exceptions as defects"
       }
 
-      testTask "tryCatch inside CE returns Err and short-circuits" {
+      testTask "tryCatch inside CE returns Eff.Err and short-circuits" {
         let mutable ran = false
 
         let! value =
@@ -204,7 +204,7 @@ module CE =
         Expect.equal
           err.Message
           "boom"
-          "should return the captured exception as Err"
+          "should return the captured exception as Eff.Err"
 
         Expect.isFalse ran "later CE code should not run"
       }
@@ -229,7 +229,7 @@ module CE =
 
         let! value =
           eff {
-            use! _probe = Pure probe
+            use! _probe = Eff.Pure probe
             return 1
           }
           |> Eff.runTask ()
@@ -256,7 +256,7 @@ module CE =
 
         let! value =
           eff {
-            use! _resource = Pure resource
+            use! _resource = Eff.Pure resource
             return 1
           }
           |> Eff.runTask ()
@@ -287,7 +287,7 @@ module CE =
         let! value =
           eff {
             defer (Eff.thunk (fun () -> cleaned <- true))
-            return! Err "boom"
+            return! Eff.Err "boom"
           }
           |> Eff.runTask ()
 
@@ -322,7 +322,7 @@ module CE =
           eff {
             let x = 41
             defer (fun () -> seen <- x)
-            let! y = Pure 1
+            let! y = Eff.Pure 1
             return x + y
           }
           |> Eff.runTask ()
@@ -336,7 +336,7 @@ module CE =
 
         let! value =
           eff {
-            let! x = Pure 41
+            let! x = Eff.Pure 41
             defer (Eff.thunk (fun () -> seen <- seen + x))
             defer (fun () -> seen <- seen + x)
             return x + 1
@@ -402,7 +402,7 @@ module CE =
           eff {
             for x in probe.Sequence do
               if x = 2 then
-                do! Err "boom"
+                do! Eff.Err "boom"
           }
           |> Eff.runTask ()
 
@@ -421,7 +421,7 @@ module CE =
           eff {
             defer (Eff.thunk (fun () -> events.Add "outer"))
             defer (Eff.thunk (fun () -> events.Add "inner"))
-            return! Err "boom"
+            return! Eff.Err "boom"
           }
           |> Eff.runTask ()
 
