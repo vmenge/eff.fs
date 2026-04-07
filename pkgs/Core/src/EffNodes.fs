@@ -1,6 +1,11 @@
 namespace EffSharp.Core
 
 module internal EffNodes =
+  type IDeferScopeNode = interface end
+
+  type IDeferScopeOps<'t, 'e, 'env> =
+    abstract RebuildScope<'u> : (Eff<'t, 'e, 'env> -> Eff<'u, 'e, 'env>) -> Eff<'u, 'e, 'env>
+
   type Map<'src, 't, 'e, 'env>
     (source: Eff<'src, 'e, 'env>, mapper: 'src -> 't) =
     inherit Node<'t, 'e, 'env>()
@@ -69,7 +74,38 @@ module internal EffNodes =
           :: frames
         )
 
-  type Defer<'t, 'e, 'env>
+  type DeferScope<'src, 't, 'e, 'env>
+    (
+      source: Eff<'src, 'e, 'env>,
+      cont: 'src -> Eff<'t, 'e, 'env>,
+      cleanup: 'src -> Eff<unit, 'e, 'env>
+    ) =
+    inherit Node<'t, 'e, 'env>()
+    member _.Source = source
+    member _.Cont = cont
+    member _.Cleanup = cleanup
+
+    interface IDeferScopeNode
+
+    interface IDeferScopeOps<'t, 'e, 'env> with
+      member _.RebuildScope<'u>(transform: Eff<'t, 'e, 'env> -> Eff<'u, 'e, 'env>) =
+        Eff.Node(
+          DeferScope<'src, 'u, 'e, 'env>(
+            source,
+            (fun sourceValue -> transform (cont sourceValue)),
+            cleanup
+          ))
+
+    interface EffRuntime.INodeRuntime<'env> with
+      member _.Enter(_, frames) =
+        EffRuntime.Continue(
+          (EffRuntime.BoxedEff<'src, 'e, 'env>(source) :> EffRuntime.BoxedEff<'env>),
+          (EffRuntime.DeferScopeFrame<'src, 't, 'e, 'env>(cont, cleanup)
+           :> EffRuntime.Frame<'env>)
+          :: frames
+        )
+
+  type Ensure<'t, 'e, 'env>
     (body: Eff<'t, 'e, 'env>, cleanup: Eff<unit, 'e, 'env>) =
     inherit Node<'t, 'e, 'env>()
     member _.Body = body

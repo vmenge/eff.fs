@@ -51,8 +51,8 @@ module SupportedEffProvideFromE2E =
           |> String.concat System.Environment.NewLine
 
         Expect.stringContains generatedText "type ERuntimeService =" "The generated environment interface should exist for the service"
-        Expect.stringContains generatedText "inherit IRuntimeEnv" "The generated environment interface should inherit the mechanically matching inner environment"
-        Expect.stringContains generatedText "|> Eff.map (Eff.provideFrom (fun (outer: #ERuntimeService) -> outer :> IRuntimeEnv))" "The nested Eff should be adapted through a direct upcast before flattening"
+        Expect.stringContains generatedText "inherit SupportedEffProvideFromRed.IRuntimeEnv" "The generated environment interface should inherit the mechanically matching inner environment"
+        Expect.stringContains generatedText "|> Eff.map (Eff.provideFrom (fun (outer: #ERuntimeService) -> outer :> SupportedEffProvideFromRed.IRuntimeEnv))" "The nested Eff should be adapted through a direct upcast before flattening"
         Expect.stringContains generatedText "|> Eff.flatten" "The adapted nested Eff should then be flattened"
       }
 

@@ -29,7 +29,7 @@ module RegressionE2E =
 
   let tests =
     testSequenced <| testList "RegressionE2E" [
-      testTask "generated files carry source open namespaces needed for unqualified types" {
+      testTask "generated files use fully qualified names instead of replaying source opens" {
         let fixtureName = "ImportedTypeOpens"
         cleanupIntermediateDirectory fixtureName
 
@@ -41,8 +41,9 @@ module RegressionE2E =
           Path.Combine(generatedDirectory fixtureName, "EClock.g.fs")
           |> File.ReadAllText
 
-        Expect.stringContains generatedText "open System" "generated files should carry forward imported namespaces from the declaring source file"
-        Expect.stringContains generatedText "let now () : Eff<DateTime, 'e, #EClock>" "generated files should keep unqualified imported type names valid"
+        Expect.isFalse (generatedText.Contains("open System")) "generated files should not depend on copied source open directives"
+        Expect.stringContains generatedText "abstract Clock: IClock" "generated service properties should remain self-contained without replaying source opens"
+        Expect.stringContains generatedText "let now () : EffSharp.Core.Eff<System.DateTime, 'e, #EClock>" "generated members should use fully qualified return types"
       }
 
       testTask "source-mode compile ordering keeps the entry-point file last" {

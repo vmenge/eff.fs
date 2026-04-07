@@ -55,7 +55,10 @@ module Eff =
   let rec mapErr (f: 'e1 -> 'e2) (ef: Eff<'t, 'e1, 'env>) : Eff<'t, 'e2, 'env> =
     match ef with
     | Eff.Pure v -> Eff.Pure v
-    | Eff.Err e -> Eff.Err(f e)
+    | Eff.Err e ->
+      Eff.Suspend(fun () ->
+        Eff.Err(f e)
+      )
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend suspend -> Eff.Suspend(fun () -> mapErr f (suspend ()))
     | Eff.Thunk thunk -> Eff.Thunk thunk
@@ -65,7 +68,10 @@ module Eff =
 
   let rec map f ef =
     match ef with
-    | Eff.Pure v -> Eff.Pure(f v)
+    | Eff.Pure v ->
+      Eff.Suspend(fun () ->
+        Eff.Pure(f v)
+      )
     | Eff.Err err -> Eff.Err err
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend suspend -> Eff.Suspend(fun () -> map f (suspend ()))
@@ -81,7 +87,10 @@ module Eff =
 
   let rec bind f ef =
     match ef with
-    | Eff.Pure v -> f v
+    | Eff.Pure v ->
+      Eff.Suspend(fun () ->
+        f v
+      )
     | Eff.Err err -> Eff.Err err
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend _ -> Eff.Node(EffNodes.FlatMap(ef, f))
@@ -90,11 +99,40 @@ module Eff =
     | Eff.Read _ -> Eff.Node(EffNodes.FlatMap(ef, f))
     | Eff.Node node ->
       match box node with
-      | :? EffNodes.Defer<'t, 'e, 'env> as n ->
-        Eff.Node(EffNodes.Defer(bind f n.Body, n.Cleanup))
+      | :? EffNodes.IDeferScopeOps<'t, 'e, 'env> as n ->
+        n.RebuildScope(fun inner -> bind f inner)
       | _ -> Eff.Node(EffNodes.FlatMap(ef, f))
 
-  let defer cleanup body = Eff.Node(EffNodes.Defer(body, cleanup))
+  let rec internal bindReturn f ef =
+    match ef with
+    | Eff.Node node ->
+      match box node with
+      | :? EffNodes.IDeferScopeOps<'t, 'e, 'env> as n ->
+        n.RebuildScope(fun inner -> bindReturn f inner)
+      | _ -> map f ef
+    | _ -> map f ef
+
+  let rec internal deferScope cleanup eff =
+    match eff with
+    | Eff.Node node ->
+      match box node with
+      | :? EffNodes.IDeferScopeOps<'t, 'e, 'env> as n ->
+        n.RebuildScope(fun inner -> deferScope cleanup inner)
+      | _ ->
+        Eff.Node(EffNodes.DeferScope<'t, 't, 'e, 'env>(eff, Eff.Pure, cleanup))
+    | _ ->
+      Eff.Node(EffNodes.DeferScope<'t, 't, 'e, 'env>(eff, Eff.Pure, cleanup))
+
+  let internal closeScope eff =
+    match eff with
+    | Eff.Node node ->
+      match box node with
+      | :? EffNodes.IDeferScopeNode -> Eff.Suspend(fun () -> eff)
+      | _ -> eff
+    | _ -> eff
+
+  let ensure cleanup body =
+    Eff.Node(EffNodes.Ensure(body, cleanup |> map ignore))
 
   let tryCatch (f: unit -> 't) : Eff<'t, exn, 'env> =
     Eff.Suspend(fun () ->

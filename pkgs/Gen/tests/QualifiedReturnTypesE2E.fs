@@ -43,18 +43,20 @@ module QualifiedReturnTypesE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "let parse (arg1: string) : Eff<int, ParseError, #EParser>" "qualified Result should classify like Result"
-        Expect.stringContains generatedText "let fetch (arg1: string) : Eff<Response, 'e, #EHttp>" "qualified Task should classify like Task"
-        Expect.stringContains generatedText "let tryFetch (arg1: string) : Eff<Response, HttpError, #EHttp>" "qualified Task<Result<_,_>> should classify like Task<Result<_,_>>"
-        Expect.stringContains generatedText "let load (arg1: string) : Eff<Model, 'e, #EStore>" "qualified Async should classify like Async"
-        Expect.stringContains generatedText "let tryLoad (arg1: string) : Eff<Model, StoreError, #EStore>" "qualified Async<Result<_,_>> should classify like Async<Result<_,_>>"
-        Expect.stringContains generatedText "let read (arg1: string) : Eff<string, 'e, #EFileSystem>" "qualified ValueTask should classify like ValueTask"
-        Expect.stringContains generatedText "let tryRead (arg1: string) : Eff<string, FileError, #EFileSystem>" "qualified ValueTask<Result<_,_>> should classify like ValueTask<Result<_,_>>"
-        Expect.stringContains generatedText "let spawn (arg1: Job) : Eff<JobHandle<JobResult>, SpawnError, #ERuntime>" "qualified Eff should classify like Eff"
-        Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "qualified Result families should still normalize through Eff.ofResult"
-        Expect.stringContains generatedText "|> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))" "qualified Task should still normalize through Eff.ofTask"
-        Expect.stringContains generatedText "|> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))" "qualified Async should still normalize through Eff.ofAsync"
-        Expect.stringContains generatedText "|> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))" "qualified ValueTask should still normalize through Eff.ofValueTask"
+        Expect.stringContains generatedText "let parse (arg1: string) : EffSharp.Core.Eff<int, QualifiedReturnTypesRed.ParseError, #EParser>" "qualified Result should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let fetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, 'e, #EHttp>" "qualified Task should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let tryFetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, QualifiedReturnTypesRed.HttpError, #EHttp>" "qualified Task<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let load (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, 'e, #EStore>" "qualified Async should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let tryLoad (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, QualifiedReturnTypesRed.StoreError, #EStore>" "qualified Async<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let read (arg1: string) : EffSharp.Core.Eff<string, 'e, #EFileSystem>" "qualified ValueTask should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let tryRead (arg1: string) : EffSharp.Core.Eff<string, QualifiedReturnTypesRed.FileError, #EFileSystem>" "qualified ValueTask<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "let spawn (arg1: QualifiedReturnTypesRed.Job) : EffSharp.Core.Eff<QualifiedReturnTypesRed.JobHandle<QualifiedReturnTypesRed.JobResult>, QualifiedReturnTypesRed.SpawnError, #ERuntime>" "qualified Eff should stay fully qualified in generated output"
+        Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "result normalization should remain unchanged"
+        Expect.stringContains generatedText "|> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))" "task normalization should remain unchanged"
+        Expect.stringContains generatedText "|> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))" "async normalization should remain unchanged"
+        Expect.stringContains generatedText "|> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))" "value task normalization should remain unchanged"
+        Expect.isFalse (generatedText.Contains("open System")) "generated files should not rely on copied source opens"
+        Expect.isFalse (generatedText.Contains("open Microsoft.FSharp.Core")) "generated files should not replay consumer opens just to make types resolve"
         Expect.stringContains generatedText "|> Eff.flatten" "qualified Eff should still flatten nested Eff values"
       }
     ]

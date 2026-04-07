@@ -61,11 +61,11 @@ module SupportedSyncE2E =
 
         Expect.stringContains generatedText "type ELogger =" "ILogger should produce ELogger"
         Expect.stringContains generatedText "abstract Logger: ILogger" "ILogger should produce a Logger service property"
-        Expect.stringContains generatedText "let debug (arg1: string) : Eff<unit, 'e, #ELogger>" "plain unit return should stay generic over the error channel"
+        Expect.stringContains generatedText "let debug (arg1: string) : EffSharp.Core.Eff<unit, 'e, #ELogger>" "plain unit return should stay generic over the error channel"
         Expect.stringContains generatedText "type EParser =" "IParser should produce EParser"
-        Expect.stringContains generatedText "let parse (arg1: string) : Eff<int, ParseError, #EParser>" "Result-returning members should produce the concrete error channel"
+        Expect.stringContains generatedText "let parse (arg1: string) : EffSharp.Core.Eff<int, SupportedSyncRed.ParseError, #EParser>" "Result-returning members should produce the concrete error channel"
         Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "Result-returning members should normalize through Eff.ofResult"
-        Expect.stringContains generatedText "let tryFind (arg1: int, arg2: string) : Eff<User, LookupError, #ELookup>" "tupled members should preserve the tuple structure in the generated wrapper"
+        Expect.stringContains generatedText "let tryFind (arg1: int, arg2: string) : EffSharp.Core.Eff<SupportedSyncRed.User, SupportedSyncRed.LookupError, #ELookup>" "tupled members should preserve the tuple structure in the generated wrapper"
       }
 
       testTask "supported sync fixture executes generated wrappers at runtime" {

@@ -44,6 +44,6 @@ module ParseOptionsE2E =
           |> String.concat System.Environment.NewLine
 
         Expect.stringContains generatedText "type EGreeter =" "conditional [<Effect>] declarations enabled by the project defines should still be discovered"
-        Expect.stringContains generatedText "let greet (arg1: string) : Eff<string, 'e, #EGreeter>" "conditional [<Effect>] interfaces should generate callable wrappers"
+        Expect.stringContains generatedText "let greet (arg1: string) : EffSharp.Core.Eff<string, 'e, #EGreeter>" "conditional [<Effect>] interfaces should generate callable wrappers"
       }
     ]

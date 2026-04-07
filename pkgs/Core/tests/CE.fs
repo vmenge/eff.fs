@@ -347,6 +347,88 @@ module CE =
         Expect.equal seen 82 "defer should capture the bound value"
       }
 
+      testTask "defer finalizes after later computation expression steps" {
+        let events = ResizeArray<string>()
+
+        let! value =
+          eff {
+            let! x = Pure 1
+            defer (Eff.thunk (fun () -> events.Add "cleanup"))
+            do!
+              Eff.thunk (fun () ->
+                events.Add "after"
+              )
+            return x
+          }
+          |> Eff.runTask ()
+
+        Expect.equal value (Exit.Ok 1) "should preserve the successful value"
+
+        Expect.sequenceEqual
+          events
+          [ "after"; "cleanup" ]
+          "defer should finalize when the computation expression scope ends"
+      }
+
+      testTask "defer finalizes before outer continuation chained after the computation expression" {
+        let events = ResizeArray<string>()
+
+        let! value =
+          (eff {
+            let! x = Pure 1
+            defer (Eff.thunk (fun () -> events.Add "cleanup"))
+            do!
+              Eff.thunk (fun () ->
+                events.Add "after"
+              )
+            return x
+          })
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"next {x}"
+              x + 1)
+          )
+          |> Eff.runTask ()
+
+        Expect.equal value (Exit.Ok 2) "outer continuation should receive the CE result"
+
+        Expect.sequenceEqual
+          events
+          [ "after"; "cleanup"; "next 1" ]
+          "defer should stay scoped to the CE, not leak past it"
+      }
+
+      testTask "defer cleanup failure stops outer continuation chained after the computation expression" {
+        let events = ResizeArray<string>()
+
+        let! value =
+          (eff {
+            let! x = Pure 1
+            defer (Err "cleanup failed")
+            do!
+              Eff.thunk (fun () ->
+                events.Add $"after {x}"
+              )
+            return x
+          })
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"next {x}"
+              x + 1)
+          )
+          |> Eff.runTask ()
+
+        Expect.equal
+          value
+          (Exit.Err "cleanup failed")
+          "cleanup failure should override the CE result"
+
+        Expect.sequenceEqual
+          events
+          [ "after 1" ]
+          "outer continuation should not run after CE-scoped cleanup failure"
+      }
+
       testTask "for loops over sequences" {
         let values = ResizeArray<int>()
 

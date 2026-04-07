@@ -1,7 +1,7 @@
 namespace EffSharp.Gen
 
 open System
-open System.Text.RegularExpressions
+open FSharp.Compiler.Symbols
 open FSharp.Compiler.Syntax
 open FSharp.Compiler.Text
 
@@ -29,33 +29,6 @@ module Discovery =
     idents |> List.map _.idText |> String.concat "."
 
   let private joinSynLongIdent (SynLongIdent(idents, _, _)) = joinLongIdent idents
-
-  let private buildLineOffsets (source: string) =
-    let offsets = ResizeArray<int>()
-    offsets.Add(0)
-
-    for index in 0 .. source.Length - 1 do
-      if source[index] = '\n' then
-        offsets.Add(index + 1)
-
-    offsets.ToArray()
-
-  let private textInRange (source: string) =
-    let lineOffsets = buildLineOffsets source
-
-    fun (range: range) ->
-      let startOffset = lineOffsets[range.StartLine - 1] + range.StartColumn
-      let endOffset = lineOffsets[range.EndLine - 1] + range.EndColumn
-      source.Substring(startOffset, endOffset - startOffset).Trim()
-
-  let private discoverOpenNamespaces (source: string) =
-    let pattern = Regex(@"^\s*open\s+(?!type\b)([A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*)\s*$", RegexOptions.Multiline)
-
-    pattern.Matches(source)
-    |> Seq.cast<Match>
-    |> Seq.map (fun matched -> matched.Groups[1].Value)
-    |> Seq.distinct
-    |> Seq.toList
 
   let private hasEffectAttribute (attributes: SynAttributeList list) =
     let hasAttributeName expectedShortName expectedAttributeName (name: string) =
@@ -94,49 +67,43 @@ module Discovery =
           | _ -> false)
     | _ -> false
 
-  let private renderParameterGroups renderType synType =
-    let rec loop nextIndex groups currentType =
-      match currentType with
-      | SynType.Fun(argumentType, returnType, _, _) ->
-          let group, nextIndex' = renderArgumentGroup nextIndex argumentType
-          loop nextIndex' (groups @ group) returnType
-      | _ -> groups, currentType
+  let private renderParameterGroups (renderType: FSharpType -> string) (memberSymbol: FSharpMemberOrFunctionOrValue) =
+    let renderGroup nextIndex (parameters: FSharpParameter seq) =
+      let parameters = parameters |> Seq.toList
 
-    and renderArgumentGroup nextIndex argumentType =
-      match argumentType with
-      | SynType.LongIdent(SynLongIdent([ ident ], _, _)) when ident.idText = "unit" ->
+      match parameters with
+      | [] -> [], nextIndex
+      | [ parameter ] when renderType parameter.Type = "unit" ->
           [], nextIndex
-      | SynType.Tuple(false, segments, _) ->
-          let parameters, finalIndex =
-            (([], nextIndex), segments)
-            ||> List.fold (fun (acc, index) segment ->
-              match segment with
-              | SynTupleTypeSegment.Type tupleType ->
-                  let parameter = {
-                    Name = $"arg{index}"
-                    TypeName = renderType tupleType
-                  }
-
-                  acc @ [ parameter ], index + 1
-              | SynTupleTypeSegment.Star _
-              | SynTupleTypeSegment.Slash _ -> acc, index)
-
-          [ ParameterGroup.Tupled parameters ], finalIndex
+      | [ parameter ] ->
+          [ ParameterGroup.Single {
+              Name = $"arg{nextIndex}"
+              TypeName = renderType parameter.Type
+            } ],
+          nextIndex + 1
       | _ ->
-          let parameter = {
-            Name = $"arg{nextIndex}"
-            TypeName = renderType argumentType
-          }
+          let renderedParameters, finalIndex =
+            (([], nextIndex), parameters)
+            ||> List.fold (fun (acc, index) parameter ->
+              acc @ [ {
+                Name = $"arg{index}"
+                TypeName = renderType parameter.Type
+              } ],
+              index + 1)
 
-          [ ParameterGroup.Single parameter ], nextIndex + 1
+          [ ParameterGroup.Tupled renderedParameters ], finalIndex
 
-    loop 1 [] synType
+    (([], 1), memberSymbol.CurriedParameterGroups |> Seq.toList)
+    ||> List.fold (fun (groups, nextIndex) group ->
+      let renderedGroup, nextIndex' = renderGroup nextIndex group
+      groups @ renderedGroup, nextIndex')
+    |> fst
 
-  let private discoverMethod filePath renderType memberDefn =
+  let private discoverMethod (parsedFile: ParsedSourceFile) memberDefn =
     match memberDefn with
     | SynMemberDefn.AbstractSlot
         (
-          SynValSig(_, SynIdent(ident, _), _, memberType, _, _, _, _, _, _, _, _),
+          SynValSig(_, SynIdent(ident, _), _, _, _, _, _, _, _, _, _, _),
           memberFlags,
           _,
           _
@@ -145,42 +112,53 @@ module Discovery =
           Error [
             createIdentDiagnostic
               "EFFGEN002"
-              filePath
+              parsedFile.FilePath
               ident
               $"[<Effect>] interface member '{ident.idText}' is not supported. Only abstract methods are supported."
           ]
         else
-          let parameterGroups, returnType = renderParameterGroups renderType memberType
-          let returnShape = Classification.classifyReturnType renderType returnType
-
-          match returnShape with
-          | ReturnShape.Unsupported rawType ->
+          match FcsParsing.tryFindMemberSymbol parsedFile ident with
+          | None ->
               Error [
                 createIdentDiagnostic
                   "EFFGEN003"
-                  filePath
+                  parsedFile.FilePath
                   ident
-                  $"[<Effect>] method '{ident.idText}' has unsupported return shape '{rawType}'."
+                  $"[<Effect>] method '{ident.idText}' could not be resolved semantically."
               ]
-          | _ ->
-              Ok {
-                SourceName = ident.idText
-                WrapperName = Naming.wrapperName ident.idText
-                DeclarationLine = ident.idRange.StartLine
-                DeclarationColumn = ident.idRange.StartColumn + 1
-                ParameterGroups = parameterGroups
-                ReturnShape = returnShape
-              }
+          | Some memberSymbol ->
+              let parameterGroups = renderParameterGroups FcsParsing.renderType memberSymbol
+              let returnShape =
+                Classification.classifyReturnType FcsParsing.renderType memberSymbol.ReturnParameter.Type
+
+              match returnShape with
+              | ReturnShape.Unsupported rawType ->
+                  Error [
+                    createIdentDiagnostic
+                      "EFFGEN003"
+                      parsedFile.FilePath
+                      ident
+                      $"[<Effect>] method '{ident.idText}' has unsupported return shape '{rawType}'."
+                  ]
+              | _ ->
+                  Ok {
+                    SourceName = ident.idText
+                    WrapperName = Naming.wrapperName ident.idText
+                    DeclarationLine = ident.idRange.StartLine
+                    DeclarationColumn = ident.idRange.StartColumn + 1
+                    ParameterGroups = parameterGroups
+                    ReturnShape = returnShape
+                  }
     | _ ->
         Error [
           createRangeDiagnostic
             "EFFGEN002"
-            filePath
+            parsedFile.FilePath
             memberDefn.Range
             "[<Effect>] interface members are not supported here. Only abstract methods are supported."
         ]
 
-  let private discoverType filePath namespaceName openNamespaces renderType typeDefn =
+  let private discoverType (parsedFile: ParsedSourceFile) namespaceName typeDefn =
     match typeDefn with
     | SynTypeDefn
         (
@@ -202,7 +180,7 @@ module Discovery =
                   Diagnostics = [
                     createIdentDiagnostic
                       "EFFGEN004"
-                      filePath
+                      parsedFile.FilePath
                       typeName
                       $"[<Effect>] interface '{serviceName}' must declare at least one abstract method."
                   ]
@@ -211,7 +189,7 @@ module Discovery =
               let discoveredMethods, diagnostics =
                 (([], []), members)
                 ||> List.fold (fun (methodsAcc, diagnosticsAcc) memberDefn ->
-                  match discoverMethod filePath renderType memberDefn with
+                  match discoverMethod parsedFile memberDefn with
                   | Ok methodModel -> methodsAcc @ [ methodModel ], diagnosticsAcc
                   | Error memberDiagnostics -> methodsAcc, diagnosticsAcc @ memberDiagnostics)
 
@@ -233,9 +211,9 @@ module Discovery =
                     Interfaces = [
                       {
                         Namespace = namespaceName
-                        OpenNamespaces = openNamespaces
-                        SourceFile = filePath
+                        SourceFile = parsedFile.FilePath
                         ServiceName = serviceName
+                        ServiceTypeName = joinLongIdent longId
                         EnvironmentName = Naming.environmentName serviceName
                         PropertyName = Naming.propertyName serviceName
                         DeclarationLine = typeName.idRange.StartLine
@@ -253,7 +231,7 @@ module Discovery =
                 Diagnostics = [
                   createIdentDiagnostic
                     "EFFGEN001"
-                    filePath
+                    parsedFile.FilePath
                     typeName
                     $"[<Effect>] can only be applied to interfaces. '{serviceName}' is not an interface."
                 ]
@@ -261,10 +239,6 @@ module Discovery =
     | _ -> emptyResult
 
   let discoverInterfaces (parsedFile: ParsedSourceFile) =
-    let textForRange = textInRange parsedFile.Source
-    let renderType (synType: SynType) = textForRange synType.Range
-    let openNamespaces = discoverOpenNamespaces parsedFile.Source
-
     match parsedFile.ParseTree with
     | ParsedInput.ImplFile(ParsedImplFileInput(_, _, _, _, modules, _, _, _)) ->
         (([], []), modules)
@@ -283,7 +257,7 @@ module Discovery =
                 | SynModuleDecl.Types(typeDefns, _) ->
                     ((innerInterfacesAcc, innerDiagnosticsAcc), typeDefns)
                     ||> List.fold (fun (typeInterfacesAcc, typeDiagnosticsAcc) typeDefn ->
-                      let discovery = discoverType parsedFile.FilePath namespaceName openNamespaces renderType typeDefn
+                      let discovery = discoverType parsedFile namespaceName typeDefn
 
                       typeInterfacesAcc @ discovery.Interfaces,
                       typeDiagnosticsAcc @ discovery.Diagnostics)

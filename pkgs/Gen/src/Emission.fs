@@ -39,12 +39,12 @@ module Emission =
     | ReturnShape.Plain valueType
     | ReturnShape.Task valueType
     | ReturnShape.Async valueType
-    | ReturnShape.ValueTask valueType -> $"Eff<{valueType}, 'e, #{environmentName}>"
+    | ReturnShape.ValueTask valueType -> $"EffSharp.Core.Eff<{valueType}, 'e, #{environmentName}>"
     | ReturnShape.Result(okType, errorType)
     | ReturnShape.TaskResult(okType, errorType)
     | ReturnShape.AsyncResult(okType, errorType)
     | ReturnShape.ValueTaskResult(okType, errorType)
-    | ReturnShape.Eff(okType, errorType, _) -> $"Eff<{okType}, {errorType}, #{environmentName}>"
+    | ReturnShape.Eff(okType, errorType, _) -> $"EffSharp.Core.Eff<{okType}, {errorType}, #{environmentName}>"
     | ReturnShape.Unsupported rawType -> failwith $"Unsupported return type reached emission: {rawType}"
 
   let private emitMethod builder effectInterface methodModel =
@@ -106,15 +106,11 @@ module Emission =
 
     appendLine builder "open EffSharp.Core"
 
-    for openNamespace in effectInterface.OpenNamespaces do
-      if openNamespace <> "EffSharp.Core" then
-        appendLine builder $"open {openNamespace}"
-
     appendLine builder ""
     appendLine builder $"type {effectInterface.EnvironmentName} ="
 
     if effectInterface.InheritedEnvironments.IsEmpty then
-      appendLine builder $"  abstract {effectInterface.PropertyName}: {effectInterface.ServiceName}"
+      appendLine builder $"  abstract {effectInterface.PropertyName}: {effectInterface.ServiceTypeName}"
     else
       for inheritedEnvironment in effectInterface.InheritedEnvironments do
         appendLine builder $"  inherit {inheritedEnvironment}"

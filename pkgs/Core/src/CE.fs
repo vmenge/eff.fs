@@ -56,7 +56,7 @@ module CE =
               Eff.Pure ()
           )
 
-        Eff.defer cleanup (loop ())
+        Eff.ensure cleanup (loop ())
       )
 
     [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
@@ -65,8 +65,7 @@ module CE =
         state: Eff<'t, 'e, 'env>,
         [<ProjectionParameter>] cleanup: 't -> Eff<unit, 'e, 'env>
       ) : Eff<'t, 'e, 'env> =
-      state
-      |> Eff.bind (fun vspace -> Eff.defer (cleanup vspace) (Eff.Pure vspace))
+      Eff.deferScope cleanup state
 
     [<CustomOperation("defer", MaintainsVariableSpaceUsingBind = true)>]
     member _.Defer
@@ -74,10 +73,7 @@ module CE =
         state: Eff<'t, 'e, 'env>,
         [<ProjectionParameter>] cleanup: 't -> unit -> unit
       ) : Eff<'t, 'e, 'env> =
-      state
-      |> Eff.bind (fun vspace ->
-        Eff.defer (Eff.thunk (cleanup vspace)) (Eff.Pure vspace)
-      )
+      Eff.deferScope (fun vspace -> Eff.thunk (cleanup vspace)) state
 
     member _.Source(sequence: seq<'t>) : seq<'t> = sequence
 
@@ -85,6 +81,9 @@ module CE =
 
   type EffBuilder() =
     inherit EffBuilderBase()
+
+    member _.Run(eff: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> =
+      Eff.closeScope eff
 
     member _.ReturnFrom(eff: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> = eff
 
@@ -96,7 +95,7 @@ module CE =
     member _.BindReturn
       (eff: Eff<'t, 'e, 'env>, f: 't -> 'u)
       : Eff<'u, 'e, 'env> =
-      Eff.map f eff
+      Eff.bindReturn f eff
 
     member _.Source(eff: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> = eff
 

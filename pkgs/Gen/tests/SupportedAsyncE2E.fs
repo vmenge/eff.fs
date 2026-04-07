@@ -51,13 +51,13 @@ module SupportedAsyncE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "let fetch (arg1: string) : Eff<Response, 'e, #EHttp>" "Task-returning members should remain generic over the error channel"
+        Expect.stringContains generatedText "let fetch (arg1: string) : EffSharp.Core.Eff<SupportedAsyncRed.Response, 'e, #EHttp>" "Task-returning members should remain generic over the error channel"
         Expect.stringContains generatedText "|> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))" "Task-returning members should normalize through Eff.ofTask"
-        Expect.stringContains generatedText "let tryFetch (arg1: string) : Eff<Response, HttpError, #EHttp>" "Task<Result<_,_>> should produce the concrete error channel"
+        Expect.stringContains generatedText "let tryFetch (arg1: string) : EffSharp.Core.Eff<SupportedAsyncRed.Response, SupportedAsyncRed.HttpError, #EHttp>" "Task<Result<_,_>> should produce the concrete error channel"
         Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "Task<Result<_,_>> should finish by binding Eff.ofResult"
-        Expect.stringContains generatedText "let load (arg1: string) : Eff<Model, 'e, #EStore>" "Async-returning members should remain generic over the error channel"
+        Expect.stringContains generatedText "let load (arg1: string) : EffSharp.Core.Eff<SupportedAsyncRed.Model, 'e, #EStore>" "Async-returning members should remain generic over the error channel"
         Expect.stringContains generatedText "|> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))" "Async-returning members should normalize through Eff.ofAsync"
-        Expect.stringContains generatedText "let read (arg1: string) : Eff<string, 'e, #EFileSystem>" "ValueTask-returning members should remain generic over the error channel"
+        Expect.stringContains generatedText "let read (arg1: string) : EffSharp.Core.Eff<string, 'e, #EFileSystem>" "ValueTask-returning members should remain generic over the error channel"
         Expect.stringContains generatedText "|> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))" "ValueTask-returning members should normalize through Eff.ofValueTask"
       }
 

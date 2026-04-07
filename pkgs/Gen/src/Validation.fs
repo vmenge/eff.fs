@@ -1,8 +1,8 @@
 namespace EffSharp.Gen
 
 open System
+open FSharp.Compiler.Symbols
 open FSharp.Compiler.Syntax
-open FSharp.Compiler.Text
 
 module Validation =
   type private EnvironmentContract = {
@@ -26,24 +26,6 @@ module Validation =
   let private joinLongIdent (idents: Ident list) =
     idents |> List.map _.idText |> String.concat "."
 
-  let private buildLineOffsets (source: string) =
-    let offsets = ResizeArray<int>()
-    offsets.Add(0)
-
-    for index in 0 .. source.Length - 1 do
-      if source[index] = '\n' then
-        offsets.Add(index + 1)
-
-    offsets.ToArray()
-
-  let private textInRange (source: string) =
-    let lineOffsets = buildLineOffsets source
-
-    fun (targetRange: range) ->
-      let startOffset = lineOffsets[targetRange.StartLine - 1] + targetRange.StartColumn
-      let endOffset = lineOffsets[targetRange.EndLine - 1] + targetRange.EndColumn
-      source.Substring(startOffset, endOffset - startOffset).Trim()
-
   let private normalizeEnvironmentType (environmentType: string) =
     if environmentType.StartsWith("#", StringComparison.Ordinal) then
       environmentType.Substring(1)
@@ -53,9 +35,10 @@ module Validation =
   let private matchesTypeName (candidate: string) (typeName: string) =
     typeName = candidate || typeName.EndsWith($".{candidate}", StringComparison.Ordinal)
 
-  let private discoverEnvironmentContracts (parsedFile: ParsedSourceFile) =
-    let renderType = textInRange parsedFile.Source
+  let private equivalentTypeName left right =
+    matchesTypeName left right || matchesTypeName right left
 
+  let private discoverEnvironmentContracts (parsedFile: ParsedSourceFile) =
     match parsedFile.ParseTree with
     | ParsedInput.ImplFile(ParsedImplFileInput(_, _, _, _, modules, _, _, _)) ->
         modules
@@ -82,9 +65,12 @@ module Validation =
                             members
                             |> List.choose (fun memberDefn ->
                               match memberDefn with
-                              | SynMemberDefn.AbstractSlot(SynValSig(_, SynIdent(ident, _), _, propertyType, _, _, _, _, _, _, _, _), memberFlags, _, _)
+                              | SynMemberDefn.AbstractSlot(SynValSig(_, SynIdent(ident, _), _, _, _, _, _, _, _, _, _, _), memberFlags, _, _)
                                 when memberFlags.MemberKind = SynMemberKind.PropertyGet ->
-                                  Some(ident.idText, renderType propertyType.Range)
+                                  match FcsParsing.tryFindMemberSymbol parsedFile ident with
+                                  | Some propertySymbol ->
+                                      Some(ident.idText, FcsParsing.renderType propertySymbol.ReturnParameter.Type)
+                                  | None -> None
                               | _ -> None)
 
                           if properties.IsEmpty then
@@ -121,7 +107,12 @@ module Validation =
               environmentContracts
               |> List.tryFind (fun contract ->
                 contract.Names |> List.exists (fun name -> matchesTypeName name normalizedEnvironment))
-              |> Option.exists (fun contract -> contract.Properties = [ effectInterface.PropertyName, effectInterface.ServiceName ])
+              |> Option.exists (fun contract ->
+                match contract.Properties with
+                | [ propertyName, propertyType ] ->
+                    propertyName = effectInterface.PropertyName
+                    && equivalentTypeName effectInterface.ServiceTypeName propertyType
+                | _ -> false)
 
             if isMechanicallyDerivable then
               inheritedAcc @ [ normalizedEnvironment ], diagnosticsAcc

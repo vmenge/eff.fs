@@ -29,6 +29,7 @@
       <_GenParseCommandLineArg Include="--langversion:$(LangVersion)" Condition="'$(LangVersion)' != ''" />
       <_GenParseCommandLineArg Include="@(_GenDefine->'--define:%(Identity)')" />
       <_GenParseCommandLineArg Include="@(DisabledLanguageFeatures->'--disable-language-feature:%(Identity)')" />
+      <_GenParseCommandLineArg Include="@(ReferencePath->'--reference:%(FullPath)')" Condition="'@(ReferencePath)' != ''" />
     </ItemGroup>
 
     <GenerateEffectFilesTask

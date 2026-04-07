@@ -56,7 +56,7 @@ module DiagnosticsE2E =
       }
 
       testTask "unsupported return shape fails with a precise diagnostic" {
-        do! assertGeneratorDiagnostic "UnsupportedReturnShape" [ "EFFGEN003"; "spawn"; "environment adaptation to 'NeededEnv' is not mechanically derivable" ]
+        do! assertGeneratorDiagnostic "UnsupportedReturnShape" [ "EFFGEN003"; "spawn"; "environment adaptation to 'Gen.Fixtures.UnsupportedReturnShape.NeededEnv' is not mechanically derivable" ]
       }
 
       testTask "duplicate generated names fail with a precise diagnostic" {

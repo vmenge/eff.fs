@@ -195,6 +195,32 @@ module internal EffRuntime =
         | BoxedExn cleanupExn -> ContinueWithExit(BoxedExn cleanupExn, rest)
       )
 
+  and DeferScopeFrame<'src, 't, 'e, 'env>
+    (cont: 'src -> Eff<'t, 'e, 'env>, cleanup: 'src -> Eff<unit, 'e, 'env>) =
+    inherit Frame<'env>()
+
+    override _.HandleOk(value, rest) =
+      let sourceValue = unbox<'src> value
+
+      try
+        let cleanupEff = cleanup sourceValue
+
+        try
+          ContinueWithEff(
+            (BoxedEff<'t, 'e, 'env>(cont sourceValue) :> BoxedEff<'env>),
+            (DeferFrame<'e, 'env>(cleanupEff) :> Frame<'env>) :: rest
+          )
+        with ex ->
+          (DeferFrame<'e, 'env>(cleanupEff) :> Frame<'env>).HandleExn(ex, rest)
+      with ex ->
+        ContinueWithExit(BoxedExn ex, rest)
+
+    override _.HandleErr(err, rest) =
+      ContinueWithExit(BoxedErr err, rest)
+
+    override _.HandleExn(ex, rest) =
+      ContinueWithExit(BoxedExn ex, rest)
+
   and BracketReleaseFrame<'r, 'e, 'env>
     (resource: 'r, release: 'r -> Eff<unit, 'e, 'env>) =
     inherit Frame<'env>()

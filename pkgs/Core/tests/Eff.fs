@@ -88,6 +88,48 @@ module Eff =
           "should map captured exceptions"
       }
 
+      testTask "map on Pure captures mapper exceptions as Exit.Exn" {
+        let! value =
+          Pure 1
+          |> Eff.map (fun _ -> failwith "boom")
+          |> Eff.runTask ()
+
+        let err: exn = Exit.ex value
+
+        Expect.equal
+          err.Message
+          "boom"
+          "Pure |> map should surface mapper exceptions as Exit.Exn"
+      }
+
+      testTask "bind on Pure captures continuation exceptions as Exit.Exn" {
+        let! value =
+          Pure 1
+          |> Eff.bind (fun _ -> failwith "boom")
+          |> Eff.runTask ()
+
+        let err: exn = Exit.ex value
+
+        Expect.equal
+          err.Message
+          "boom"
+          "Pure |> bind should surface continuation exceptions as Exit.Exn"
+      }
+
+      testTask "mapErr on Err captures mapper exceptions as Exit.Exn" {
+        let! value =
+          Err "boom"
+          |> Eff.mapErr (fun _ -> failwith "wrapped boom")
+          |> Eff.runTask ()
+
+        let err: exn = Exit.ex value
+
+        Expect.equal
+          err.Message
+          "wrapped boom"
+          "Err |> mapErr should surface mapper exceptions as Exit.Exn"
+      }
+
       testTask "Suspend resolves" {
         let! value = Eff.suspend (fun () -> Pure 5) |> Eff.runTask ()
         Expect.equal value (Exit.Ok 5) "should be equal"
@@ -451,7 +493,7 @@ module Eff =
 
         let inner : Eff<int, unit, {| UserId: int |}> =
           Eff.read (fun (env: {| UserId: int |}) -> env.UserId)
-          |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+          |> Eff.ensure (Eff.thunk (fun () -> cleaned <- true))
 
         let! value =
           inner
@@ -520,7 +562,7 @@ module Eff =
         Expect.equal value (Exit.Ok 3) "should project UserId from env"
       }
 
-      testTask "defer" {
+      testTask "ensure" {
         let mutable number = 0
 
         do!
@@ -528,33 +570,33 @@ module Eff =
             failwith "oh no!"
             return 5
           })
-          |> Eff.defer (Eff.thunk (fun () -> number <- 1))
+          |> Eff.ensure (Eff.thunk (fun () -> number <- 1))
           |> Eff.runTask ()
 
-        Expect.equal number 1 "defer should have run"
+        Expect.equal number 1 "ensure should have run"
 
         do!
           Eff.ofTask (fun () -> task { return Error(exn "oh no") })
           |> Eff.bind Eff.ofResult
-          |> Eff.defer (Eff.thunk (fun () -> number <- 2))
+          |> Eff.ensure (Eff.thunk (fun () -> number <- 2))
           |> Eff.runTask ()
 
-        Expect.equal number 2 "defer should have run"
+        Expect.equal number 2 "ensure should have run"
 
         do!
           Eff.ofTask (fun () -> task { return 5 })
-          |> Eff.defer (Eff.thunk (fun () -> number <- 3))
+          |> Eff.ensure (Eff.thunk (fun () -> number <- 3))
           |> Eff.runTask ()
 
-        Expect.equal number 3 "defer should have run"
+        Expect.equal number 3 "ensure should have run"
       }
 
-      testTask "defer runs after tryCatch failure" {
+      testTask "ensure runs after tryCatch failure" {
         let mutable cleaned = false
 
         let! value =
           Eff.tryCatch (fun () -> failwith "boom")
-          |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+          |> Eff.ensure (Eff.thunk (fun () -> cleaned <- true))
           |> Eff.runTask ()
 
         let err: exn = Exit.err value
@@ -563,15 +605,15 @@ module Eff =
 
         Expect.isTrue
           cleaned
-          "defer should run after explicit exception capture"
+          "ensure should run after explicit exception capture"
       }
 
-      testTask "defer runs after tryTask failure" {
+      testTask "ensure runs after tryTask failure" {
         let mutable cleaned = false
 
         let! value =
           Eff.tryTask (fun () -> task { failwith "boom" })
-          |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+          |> Eff.ensure (Eff.thunk (fun () -> cleaned <- true))
           |> Eff.runTask ()
 
         let err: exn = Exit.err value
@@ -580,15 +622,15 @@ module Eff =
 
         Expect.isTrue
           cleaned
-          "defer should run after explicit task exception capture"
+          "ensure should run after explicit task exception capture"
       }
 
-      testTask "defer runs after tryAsync failure" {
+      testTask "ensure runs after tryAsync failure" {
         let mutable cleaned = false
 
         let! value =
           Eff.tryAsync (fun () -> async { failwith "boom" })
-          |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+          |> Eff.ensure (Eff.thunk (fun () -> cleaned <- true))
           |> Eff.runTask ()
 
         let err: exn = Exit.err value
@@ -597,7 +639,62 @@ module Eff =
 
         Expect.isTrue
           cleaned
-          "defer should run after explicit async exception capture"
+          "ensure should run after explicit async exception capture"
+      }
+
+      testTask "ensure finalizes the chain it wraps before outer continuation runs" {
+        let events = ResizeArray<string>()
+
+        let! value =
+          (Pure 1 : Eff<int, unit, unit>)
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"body {x}"
+              x + 1)
+          )
+          |> Eff.ensure (Eff.thunk (fun () -> events.Add "cleanup"))
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"next {x}"
+              x + 1)
+          )
+          |> Eff.runTask ()
+
+        Expect.equal value (Exit.Ok 3) "outer continuation should still receive the finalized value"
+
+        Expect.sequenceEqual
+          events
+          [ "body 1"; "cleanup"; "next 2" ]
+          "ensure should run after the wrapped chain terminates and before outer continuation resumes"
+      }
+
+      testTask "ensure cleanup failure prevents outer continuation" {
+        let events = ResizeArray<string>()
+
+        let! value =
+          (Pure 1 : Eff<int, string, unit>)
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"body {x}"
+              x + 1)
+          )
+          |> Eff.ensure (Err "cleanup failed")
+          |> Eff.bind (fun x ->
+            Eff.thunk (fun () ->
+              events.Add $"next {x}"
+              x + 1)
+          )
+          |> Eff.runTask ()
+
+        Expect.equal
+          value
+          (Exit.Err "cleanup failed")
+          "cleanup failure should override the wrapped chain before outer continuation runs"
+
+        Expect.sequenceEqual
+          events
+          [ "body 1" ]
+          "outer continuation should not run once ensure cleanup fails"
       }
 
       testTask "tapErr runs side effect and preserves the original error" {
@@ -743,7 +840,7 @@ module Eff =
 
         let! value =
           Eff.thunk (fun () -> failwith "boom")
-          |> Eff.defer (Eff.thunk (fun () -> cleaned <- true))
+          |> Eff.ensure (Eff.thunk (fun () -> cleaned <- true))
           |> Eff.catch (fun ex -> Pure ex.Message)
           |> Eff.runTask ()
 

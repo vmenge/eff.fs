@@ -50,7 +50,7 @@ module SupportedEffExactE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "let spawn (arg1: Job) : Eff<JobHandle<JobResult>, SpawnError, #ERuntime>" "Eff-returning members should preserve the concrete success and error types"
+        Expect.stringContains generatedText "let spawn (arg1: SupportedEffExactRed.Job) : EffSharp.Core.Eff<SupportedEffExactRed.JobHandle<SupportedEffExactRed.JobResult>, SupportedEffExactRed.SpawnError, #ERuntime>" "Eff-returning members should preserve the concrete success and error types"
         Expect.stringContains generatedText "|> Eff.flatten" "Exact Eff returns should flatten the nested Eff value"
       }
 
