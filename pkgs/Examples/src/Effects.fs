@@ -12,6 +12,8 @@ type Log =
 type Clock =
   abstract now: unit -> DateTime
 
-[<Effect>]
+[<Effect(Mode.Wrap)>]
 type Fs =
-  abstract readToString: string -> Eff<string, string, unit>
+  abstract read: string -> Eff<string, string, unit>
+  abstract write: string -> byte array -> Eff<unit, string, unit>
+  abstract delete: string -> Eff<unit, string, unit>
