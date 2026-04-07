@@ -10,12 +10,12 @@ type ConsoleGreeter() =
 type AppEnv() =
   let greeter = ConsoleGreeter() :> IGreeter
 
-  interface EGreeter with
-    member _.Greeter = greeter
+  interface IGreeter with
+    member _.Greet(name: string) = greeter.Greet(name)
 
 let run () =
   let result =
-    EGreeter.greet "packaged consumer"
+    IGreeter.greet "packaged consumer"
     |> Eff.runSync (AppEnv())
 
   match result with

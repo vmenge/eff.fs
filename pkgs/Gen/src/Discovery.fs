@@ -30,19 +30,49 @@ module Discovery =
 
   let private joinSynLongIdent (SynLongIdent(idents, _, _)) = joinLongIdent idents
 
-  let private hasEffectAttribute (attributes: SynAttributeList list) =
-    let hasAttributeName expectedShortName expectedAttributeName (name: string) =
-      name = expectedShortName
-      || name = expectedAttributeName
-      || name.EndsWith($".{expectedShortName}", StringComparison.Ordinal)
-      || name.EndsWith($".{expectedAttributeName}", StringComparison.Ordinal)
+  let private hasAttributeName expectedShortName expectedAttributeName (name: string) =
+    name = expectedShortName
+    || name = expectedAttributeName
+    || name.EndsWith($".{expectedShortName}", StringComparison.Ordinal)
+    || name.EndsWith($".{expectedAttributeName}", StringComparison.Ordinal)
 
+  let private effectAttributes (attributes: SynAttributeList list) =
     attributes
     |> List.collect (fun (attributeList: SynAttributeList) -> attributeList.Attributes)
-    |> List.exists (fun attribute ->
+    |> List.filter (fun attribute ->
       attribute.TypeName
       |> joinSynLongIdent
       |> hasAttributeName "Effect" "EffectAttribute")
+
+  let private hasEffectAttribute (attributes: SynAttributeList list) =
+    not (List.isEmpty (effectAttributes attributes))
+
+  let rec private unwrapParens expr =
+    match expr with
+    | SynExpr.Paren(innerExpr, _, _, _) -> unwrapParens innerExpr
+    | _ -> expr
+
+  let private tryParseModeValue expr =
+    let matchesModeCase expectedName longIdent =
+      let names =
+        match longIdent with
+        | SynLongIdent(idents, _, _) -> idents |> List.map _.idText
+
+      match List.rev names with
+      | actualName :: "Mode" :: _
+      | actualName :: _ when actualName = expectedName -> true
+      | _ -> false
+
+    match unwrapParens expr with
+    | SynExpr.Const(SynConst.Unit, _) -> Some Mode.Direct
+    | SynExpr.LongIdent(_, longIdent, _, _) when matchesModeCase "Direct" longIdent -> Some Mode.Direct
+    | SynExpr.LongIdent(_, longIdent, _, _) when matchesModeCase "Wrap" longIdent -> Some Mode.Wrap
+    | _ -> None
+
+  let private effectMode attributes =
+    effectAttributes attributes
+    |> List.tryPick (fun attribute -> tryParseModeValue attribute.ArgExpr)
+    |> Option.defaultValue Mode.Direct
 
   let private hasAbstractClassAttribute (attributes: SynAttributeList list) =
     attributes
@@ -171,6 +201,7 @@ module Discovery =
         ) when hasEffectAttribute attributes ->
         let serviceName = longId |> List.last |> _.idText
         let typeName = longId |> List.last
+        let mode = effectMode attributes
 
         match representation with
         | SynTypeDefnRepr.ObjectModel(_, members, _) when isInterfaceRepresentation attributes representation ->
@@ -200,8 +231,12 @@ module Discovery =
                     match methodModel.ReturnShape with
                     | ReturnShape.Eff(_, _, environmentType)
                       when environmentType <> "unit"
-                           && environmentType <> Naming.environmentName serviceName
-                           && environmentType <> $"#{Naming.environmentName serviceName}" ->
+                           && environmentType <> Naming.environmentName mode serviceName
+                           && environmentType <> $"#{Naming.environmentName mode serviceName}"
+                           && environmentType <> serviceName
+                           && environmentType <> $"#{serviceName}"
+                           && environmentType <> joinLongIdent longId
+                           && environmentType <> $"#{joinLongIdent longId}" ->
                         Some environmentType
                     | _ -> None)
                   |> List.distinct
@@ -212,9 +247,10 @@ module Discovery =
                       {
                         Namespace = namespaceName
                         SourceFile = parsedFile.FilePath
+                        Mode = mode
                         ServiceName = serviceName
                         ServiceTypeName = joinLongIdent longId
-                        EnvironmentName = Naming.environmentName serviceName
+                        EnvironmentName = Naming.environmentName mode serviceName
                         PropertyName = Naming.propertyName serviceName
                         DeclarationLine = typeName.idRange.StartLine
                         DeclarationColumn = typeName.idRange.StartColumn + 1

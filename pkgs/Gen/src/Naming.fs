@@ -9,7 +9,13 @@ module Naming =
     else
       name
 
-  let environmentName serviceName = $"E{stripInterfacePrefix serviceName}"
+  let wrappedEnvironmentName serviceName = $"E{stripInterfacePrefix serviceName}"
+
+  let environmentName mode serviceName =
+    if mode = Mode.Wrap then
+      wrappedEnvironmentName serviceName
+    else
+      serviceName
 
   let propertyName serviceName = stripInterfacePrefix serviceName
 

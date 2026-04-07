@@ -33,14 +33,14 @@ module SupportedSyncE2E =
 
   let tests =
     testSequenced <| testList "SupportedSyncE2E" [
-      testTask "supported sync fixture builds with generated wrappers in the same build" {
+      testTask "supported sync fixture builds with generated modules in the same build" {
         let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully once sync generation exists. Output:{System.Environment.NewLine}{result.Output}"
         Expect.isTrue (Directory.Exists(generatedDirectory)) $"fixture {fixtureName} should emit generated files into {generatedDirectory}"
       }
 
-      testTask "supported sync generated output uses naming and result normalization from the spec" {
+      testTask "supported sync generated output uses direct modules and result normalization from the spec" {
         let! result = builtFixture.Value
 
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully before inspecting generated output. Output:{System.Environment.NewLine}{result.Output}"
@@ -59,16 +59,16 @@ module SupportedSyncE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "type ELogger =" "ILogger should produce ELogger"
-        Expect.stringContains generatedText "abstract Logger: ILogger" "ILogger should produce a Logger service property"
-        Expect.stringContains generatedText "let debug (arg1: string) : EffSharp.Core.Eff<unit, 'e, #ELogger>" "plain unit return should stay generic over the error channel"
-        Expect.stringContains generatedText "type EParser =" "IParser should produce EParser"
-        Expect.stringContains generatedText "let parse (arg1: string) : EffSharp.Core.Eff<int, SupportedSyncRed.ParseError, #EParser>" "Result-returning members should produce the concrete error channel"
+        Expect.stringContains generatedText "type ILogger with" "ILogger should produce a type extension on the source interface"
+        Expect.stringContains generatedText "static member debug (arg1: string) : EffSharp.Core.Eff<unit, 'e, #ILogger>" "plain unit return should stay generic over the error channel"
+        Expect.stringContains generatedText "type IParser with" "IParser should produce a type extension on the source interface"
+        Expect.stringContains generatedText "static member parse (arg1: string) : EffSharp.Core.Eff<int, SupportedSyncRed.ParseError, #IParser>" "Result-returning members should produce the concrete error channel"
         Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "Result-returning members should normalize through Eff.ofResult"
-        Expect.stringContains generatedText "let tryFind (arg1: int, arg2: string) : EffSharp.Core.Eff<SupportedSyncRed.User, SupportedSyncRed.LookupError, #ELookup>" "tupled members should preserve the tuple structure in the generated wrapper"
+        Expect.stringContains generatedText "static member tryFind (arg1: int, arg2: string) : EffSharp.Core.Eff<SupportedSyncRed.User, SupportedSyncRed.LookupError, #ILookup>" "tupled members should preserve the tuple structure in the generated wrapper"
+        Expect.isFalse (generatedText.Contains("type ELogger =")) "direct generation should not emit wrapper environment interfaces by default"
       }
 
-      testTask "supported sync fixture executes generated wrappers at runtime" {
+      testTask "supported sync fixture executes generated modules at runtime" {
         let! buildResult = builtFixture.Value
         Expect.equal buildResult.ExitCode 0 $"fixture {fixtureName} should build successfully before runtime verification. Output:{System.Environment.NewLine}{buildResult.Output}"
 

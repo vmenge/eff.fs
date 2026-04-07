@@ -4,31 +4,22 @@ open EffSharp.Core
 open System
 
 type AppEnv() =
-  interface ELogger with
-    member _.Logger =
-      { new ILogger with
-          member _.info msg = printfn "%s" msg
-      }
+  interface Log with
+    member _.info msg = printfn "%s" msg
 
-  interface EClock with
-    member _.Clock =
-      { new IClock with
-          member _.now() = DateTime.Now
-      }
+  interface Clock with
+    member _.now() = DateTime.Now
 
-  interface EFs with
-    member _.Fs =
-      { new IFs with
-          member _.readToString _path = Pure "contents"
-      }
+  interface Fs with
+    member _.readToString _path = Pure "contents"
 
 
 let program () = eff {
-  let! now = EClock.now ()
-  do! ELogger.info $"starting program at {now}"
+  let! now = Clock.now ()
+  do! Log.info $"starting program at {now}"
 
-  let! contents = EFs.readToString "filepath"
-  do! ELogger.info $"file contents are {contents}"
+  let! contents = Fs.readToString "filepath"
+  do! Log.info $"file contents are {contents}"
 
   return ()
 }

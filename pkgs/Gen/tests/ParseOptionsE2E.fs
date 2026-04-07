@@ -29,7 +29,7 @@ module ParseOptionsE2E =
 
   let tests =
     testSequenced <| testList "ParseOptionsE2E" [
-      testTask "generator honors project-defined conditional compilation when discovering [<Effect>] interfaces" {
+      testTask "generator honors project-defined conditional compilation when discovering default direct [<Effect>] interfaces" {
         cleanupIntermediateDirectory ()
 
         let! result = buildProject fixtureProject
@@ -43,7 +43,8 @@ module ParseOptionsE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "type EGreeter =" "conditional [<Effect>] declarations enabled by the project defines should still be discovered"
-        Expect.stringContains generatedText "let greet (arg1: string) : EffSharp.Core.Eff<string, 'e, #EGreeter>" "conditional [<Effect>] interfaces should generate callable wrappers"
+        Expect.stringContains generatedText "type IGreeter with" "conditional [<Effect>] declarations enabled by the project defines should still be discovered"
+        Expect.stringContains generatedText "static member greet (arg1: string) : EffSharp.Core.Eff<string, 'e, #IGreeter>" "default [<Effect>] interfaces should generate callable type extensions against the tagged interface"
+        Expect.isFalse (generatedText.Contains("type EGreeter =")) "default direct generation should not synthesize a wrapper environment interface"
       }
     ]

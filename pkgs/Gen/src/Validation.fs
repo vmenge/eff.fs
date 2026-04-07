@@ -38,6 +38,13 @@ module Validation =
   let private equivalentTypeName left right =
     matchesTypeName left right || matchesTypeName right left
 
+  let private matchesOwnEnvironment effectInterface environmentType =
+    let normalizedEnvironment = normalizeEnvironmentType environmentType
+
+    equivalentTypeName effectInterface.EnvironmentName normalizedEnvironment
+    || equivalentTypeName effectInterface.ServiceName normalizedEnvironment
+    || equivalentTypeName effectInterface.ServiceTypeName normalizedEnvironment
+
   let private discoverEnvironmentContracts (parsedFile: ParsedSourceFile) =
     match parsedFile.ParseTree with
     | ParsedInput.ImplFile(ParsedImplFileInput(_, _, _, _, modules, _, _, _)) ->
@@ -97,22 +104,22 @@ module Validation =
       (([], []), effectInterface.Methods)
       ||> List.fold (fun (inheritedAcc, diagnosticsAcc) methodModel ->
         match methodModel.ReturnShape with
-        | ReturnShape.Eff(_, _, environmentType)
-          when environmentType <> "unit"
-               && environmentType <> effectInterface.EnvironmentName
-               && environmentType <> $"#{effectInterface.EnvironmentName}" ->
+        | ReturnShape.Eff(_, _, environmentType) when environmentType <> "unit" && not (matchesOwnEnvironment effectInterface environmentType) ->
             let normalizedEnvironment = normalizeEnvironmentType environmentType
 
             let isMechanicallyDerivable =
-              environmentContracts
-              |> List.tryFind (fun contract ->
-                contract.Names |> List.exists (fun name -> matchesTypeName name normalizedEnvironment))
-              |> Option.exists (fun contract ->
-                match contract.Properties with
-                | [ propertyName, propertyType ] ->
-                    propertyName = effectInterface.PropertyName
-                    && equivalentTypeName effectInterface.ServiceTypeName propertyType
-                | _ -> false)
+              if effectInterface.Mode = Mode.Wrap then
+                  environmentContracts
+                  |> List.tryFind (fun contract ->
+                    contract.Names |> List.exists (fun name -> matchesTypeName name normalizedEnvironment))
+                  |> Option.exists (fun contract ->
+                    match contract.Properties with
+                    | [ propertyName, propertyType ] ->
+                        propertyName = effectInterface.PropertyName
+                        && equivalentTypeName effectInterface.ServiceTypeName propertyType
+                    | _ -> false)
+              else
+                false
 
             if isMechanicallyDerivable then
               inheritedAcc @ [ normalizedEnvironment ], diagnosticsAcc
@@ -139,6 +146,7 @@ module Validation =
 
   let private collisionDiagnostics effectInterfaces =
     effectInterfaces
+    |> List.filter (fun effectInterface -> effectInterface.Mode = Mode.Wrap)
     |> List.groupBy (fun effectInterface -> effectInterface.Namespace, effectInterface.EnvironmentName, effectInterface.PropertyName)
     |> List.collect (fun ((_, environmentName, propertyName), groupedInterfaces) ->
       if groupedInterfaces.Length < 2 then

@@ -29,17 +29,17 @@ type Lookup() =
         Error NotFound
 
 type AppEnv(logger: ILogger, clock: IClock, parser: IParser, lookup: ILookup) =
-  interface ELogger with
-    member _.Logger = logger
+  interface ILogger with
+    member _.Debug(message: string) = logger.Debug(message)
 
-  interface EClock with
-    member _.Clock = clock
+  interface IClock with
+    member _.Now() = clock.Now()
 
-  interface EParser with
-    member _.Parser = parser
+  interface IParser with
+    member _.Parse(input: string) = parser.Parse(input)
 
-  interface ELookup with
-    member _.Lookup = lookup
+  interface ILookup with
+    member _.TryFind(id: int, name: string) = lookup.TryFind(id, name)
 
 let private expectOk expected exit name =
   match exit with

@@ -11,6 +11,7 @@
     <Compile Include="ScaffoldTests.fs" />
     <Compile Include="RedE2E.fs" />
     <Compile Include="ParseOptionsE2E.fs" />
+    <Compile Include="ModeCoverageE2E.fs" />
     <Compile Include="SupportedSyncE2E.fs" />
     <Compile Include="SupportedAsyncE2E.fs" />
     <Compile Include="QualifiedReturnTypesE2E.fs" />

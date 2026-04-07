@@ -39,7 +39,7 @@ module ExampleE2E =
 
   let tests =
     testSequenced <| testList "ExampleE2E" [
-      testTask "example project builds as a Gen consumer in the same build" {
+      testTask "example project builds as a direct-mode Gen consumer in the same build" {
         let projectText = exampleProjectText ()
 
         Expect.isFalse (projectText.Contains("EffSharp.Gen.props")) "the example should not manually import EffSharp.Gen.props"
@@ -56,9 +56,10 @@ module ExampleE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "type EClock =" "the example should generate an EClock environment interface"
-        Expect.stringContains generatedText "type EFs =" "the example should generate an EFs environment interface"
-        Expect.stringContains generatedText "type ELogger =" "the example should generate an ELogger environment interface"
+        Expect.stringContains generatedText "type IClock with" "the example should generate callable extensions for IClock"
+        Expect.stringContains generatedText "type IFs with" "the example should generate callable extensions for IFs"
+        Expect.stringContains generatedText "type ILogger with" "the example should generate callable extensions for ILogger"
+        Expect.isFalse (generatedText.Contains("type EClock =")) "default direct generation should not emit wrapper interfaces for the example"
       }
 
       testTask "example project executes generated wrappers at runtime" {

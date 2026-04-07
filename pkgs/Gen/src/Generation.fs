@@ -31,7 +31,7 @@ module Generation =
     let generatedFiles =
       effectInterfaces
       |> List.map (fun effectInterface ->
-        let outputPath = Path.Combine(outputDirectory, $"{effectInterface.EnvironmentName}.g.fs")
+        let outputPath = Path.Combine(outputDirectory, $"{effectInterface.ServiceName}.g.fs")
 
         {
           SourceFile = effectInterface.SourceFile

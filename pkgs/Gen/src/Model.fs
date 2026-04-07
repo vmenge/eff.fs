@@ -33,6 +33,7 @@ type EffectMethod = {
 type EffectInterface = {
   Namespace: string option
   SourceFile: string
+  Mode: Mode
   ServiceName: string
   ServiceTypeName: string
   EnvironmentName: string

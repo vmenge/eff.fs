@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Compile Include="ProjectInputs.fs" />
+    <Compile Include="EffectAttribute.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="Naming.fs" />
     <Compile Include="Classification.fs" />
@@ -20,7 +21,6 @@
     <Compile Include="Validation.fs" />
     <Compile Include="Emission.fs" />
     <Compile Include="Generation.fs" />
-    <Compile Include="EffectAttribute.fs" />
     <Compile Include="GeneratorTask.fs" />
   </ItemGroup>
 

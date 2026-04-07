@@ -43,14 +43,15 @@ module QualifiedReturnTypesE2E =
           |> Array.map File.ReadAllText
           |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "let parse (arg1: string) : EffSharp.Core.Eff<int, QualifiedReturnTypesRed.ParseError, #EParser>" "qualified Result should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let fetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, 'e, #EHttp>" "qualified Task should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let tryFetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, QualifiedReturnTypesRed.HttpError, #EHttp>" "qualified Task<Result<_,_>> should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let load (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, 'e, #EStore>" "qualified Async should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let tryLoad (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, QualifiedReturnTypesRed.StoreError, #EStore>" "qualified Async<Result<_,_>> should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let read (arg1: string) : EffSharp.Core.Eff<string, 'e, #EFileSystem>" "qualified ValueTask should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let tryRead (arg1: string) : EffSharp.Core.Eff<string, QualifiedReturnTypesRed.FileError, #EFileSystem>" "qualified ValueTask<Result<_,_>> should stay fully qualified in generated output"
-        Expect.stringContains generatedText "let spawn (arg1: QualifiedReturnTypesRed.Job) : EffSharp.Core.Eff<QualifiedReturnTypesRed.JobHandle<QualifiedReturnTypesRed.JobResult>, QualifiedReturnTypesRed.SpawnError, #ERuntime>" "qualified Eff should stay fully qualified in generated output"
+        Expect.stringContains generatedText "type IParser with" "qualified generation should keep the source interface as the callable type"
+        Expect.stringContains generatedText "static member parse (arg1: string) : EffSharp.Core.Eff<int, QualifiedReturnTypesRed.ParseError, #IParser>" "qualified Result should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member fetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, 'e, #IHttp>" "qualified Task should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member tryFetch (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Response, QualifiedReturnTypesRed.HttpError, #IHttp>" "qualified Task<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member load (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, 'e, #IStore>" "qualified Async should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member tryLoad (arg1: string) : EffSharp.Core.Eff<QualifiedReturnTypesRed.Model, QualifiedReturnTypesRed.StoreError, #IStore>" "qualified Async<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member read (arg1: string) : EffSharp.Core.Eff<string, 'e, #IFileSystem>" "qualified ValueTask should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member tryRead (arg1: string) : EffSharp.Core.Eff<string, QualifiedReturnTypesRed.FileError, #IFileSystem>" "qualified ValueTask<Result<_,_>> should stay fully qualified in generated output"
+        Expect.stringContains generatedText "static member spawn (arg1: QualifiedReturnTypesRed.Job) : EffSharp.Core.Eff<QualifiedReturnTypesRed.JobHandle<QualifiedReturnTypesRed.JobResult>, QualifiedReturnTypesRed.SpawnError, #IRuntime>" "qualified Eff should stay fully qualified in generated output"
         Expect.stringContains generatedText "|> Eff.bind Eff.ofResult" "result normalization should remain unchanged"
         Expect.stringContains generatedText "|> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))" "task normalization should remain unchanged"
         Expect.stringContains generatedText "|> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))" "async normalization should remain unchanged"
@@ -58,5 +59,6 @@ module QualifiedReturnTypesE2E =
         Expect.isFalse (generatedText.Contains("open System")) "generated files should not rely on copied source opens"
         Expect.isFalse (generatedText.Contains("open Microsoft.FSharp.Core")) "generated files should not replay consumer opens just to make types resolve"
         Expect.stringContains generatedText "|> Eff.flatten" "qualified Eff should still flatten nested Eff values"
+        Expect.isFalse (generatedText.Contains("type EParser =")) "direct generation should not emit wrapper environment interfaces by default"
       }
     ]

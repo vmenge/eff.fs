@@ -38,12 +38,13 @@ module RegressionE2E =
         Expect.equal result.ExitCode 0 $"fixture {fixtureName} should build successfully when generated files preserve imported namespaces. Output:{System.Environment.NewLine}{result.Output}"
 
         let generatedText =
-          Path.Combine(generatedDirectory fixtureName, "EClock.g.fs")
-          |> File.ReadAllText
+          Directory.GetFiles(generatedDirectory fixtureName, "*.g.fs")
+          |> Array.map File.ReadAllText
+          |> String.concat System.Environment.NewLine
 
         Expect.isFalse (generatedText.Contains("open System")) "generated files should not depend on copied source open directives"
-        Expect.stringContains generatedText "abstract Clock: IClock" "generated service properties should remain self-contained without replaying source opens"
-        Expect.stringContains generatedText "let now () : EffSharp.Core.Eff<System.DateTime, 'e, #EClock>" "generated members should use fully qualified return types"
+        Expect.stringContains generatedText "type IClock with" "generated callable extensions should target the source interface"
+        Expect.stringContains generatedText "static member now () : EffSharp.Core.Eff<System.DateTime, 'e, #IClock>" "generated members should use fully qualified return types"
       }
 
       testTask "source-mode compile ordering keeps the entry-point file last" {

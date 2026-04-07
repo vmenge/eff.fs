@@ -2,10 +2,10 @@ namespace Gen.Fixtures.DuplicateGeneratedNames
 
 open EffSharp.Gen
 
-[<Effect>]
+[<Effect(Mode.Wrap)>]
 type ILogger =
   abstract Log: string -> unit
 
-[<Effect>]
+[<Effect(Mode.Wrap)>]
 type Logger =
   abstract Write: string -> unit

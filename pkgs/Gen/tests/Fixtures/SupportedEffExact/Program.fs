@@ -12,8 +12,8 @@ type Runtime() =
       }
 
 type AppEnv(runtime: IRuntime) =
-  interface ERuntime with
-    member _.Runtime = runtime
+  interface IRuntime with
+    member _.Spawn(job: Job) = runtime.Spawn(job)
 
 let run () =
   let env = AppEnv(Runtime() :> IRuntime)

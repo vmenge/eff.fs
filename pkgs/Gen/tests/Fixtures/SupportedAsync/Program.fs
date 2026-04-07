@@ -29,14 +29,17 @@ type FileSystem() =
       ValueTask<Result<string, FileError>>(Ok "contents")
 
 type AppEnv(http: IHttp, store: IStore, fileSystem: IFileSystem) =
-  interface EHttp with
-    member _.Http = http
+  interface IHttp with
+    member _.Fetch(path: string) = http.Fetch(path)
+    member _.TryFetch(path: string) = http.TryFetch(path)
 
-  interface EStore with
-    member _.Store = store
+  interface IStore with
+    member _.Load(id: string) = store.Load(id)
+    member _.TryLoad(id: string) = store.TryLoad(id)
 
-  interface EFileSystem with
-    member _.FileSystem = fileSystem
+  interface IFileSystem with
+    member _.Read(path: string) = fileSystem.Read(path)
+    member _.TryRead(path: string) = fileSystem.TryRead(path)
 
 let private expectOk expected exit name =
   match exit with

@@ -5,13 +5,13 @@ open EffSharp.Gen
 open System
 
 [<Effect>]
-type ILogger =
+type Log =
   abstract info: string -> unit
 
 [<Effect>]
-type IClock =
+type Clock =
   abstract now: unit -> DateTime
 
 [<Effect>]
-type IFs =
+type Fs =
   abstract readToString: string -> Eff<string, string, unit>

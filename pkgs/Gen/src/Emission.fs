@@ -53,42 +53,52 @@ module Emission =
 
     appendLine
       builder
-      $"  let {methodModel.WrapperName} {parametersWithSpacing} : {returnSignature effectInterface.EnvironmentName methodModel.ReturnShape} ="
+      $"    static member {methodModel.WrapperName} {parametersWithSpacing} : {returnSignature effectInterface.EnvironmentName methodModel.ReturnShape} ="
 
-    appendLine
-      builder
-      $"    Eff.read (fun (env: #{effectInterface.EnvironmentName}) -> env.{effectInterface.PropertyName}.{methodModel.SourceName}{invocationSuffix methodModel})"
+    if effectInterface.Mode = Mode.Wrap then
+      appendLine
+        builder
+          $"      Eff.read (fun (env: #{effectInterface.EnvironmentName}) -> env.{effectInterface.PropertyName}.{methodModel.SourceName}{invocationSuffix methodModel})"
+    else
+      appendLine
+        builder
+        $"      Eff.read (fun (env: #{effectInterface.EnvironmentName}) -> env.{methodModel.SourceName}{invocationSuffix methodModel})"
 
     match methodModel.ReturnShape with
     | ReturnShape.Plain _ -> ()
-    | ReturnShape.Result _ -> appendLine builder "    |> Eff.bind Eff.ofResult"
+    | ReturnShape.Result _ -> appendLine builder "      |> Eff.bind Eff.ofResult"
     | ReturnShape.Task _ ->
-        appendLine builder "    |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
+        appendLine builder "      |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
     | ReturnShape.TaskResult _ ->
-        appendLine builder "    |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
-        appendLine builder "    |> Eff.bind Eff.ofResult"
+        appendLine builder "      |> Eff.bind (fun taskValue -> Eff.ofTask (fun () -> taskValue))"
+        appendLine builder "      |> Eff.bind Eff.ofResult"
     | ReturnShape.Async _ ->
-        appendLine builder "    |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
+        appendLine builder "      |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
     | ReturnShape.AsyncResult _ ->
-        appendLine builder "    |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
-        appendLine builder "    |> Eff.bind Eff.ofResult"
+        appendLine builder "      |> Eff.bind (fun asyncValue -> Eff.ofAsync (fun () -> asyncValue))"
+        appendLine builder "      |> Eff.bind Eff.ofResult"
     | ReturnShape.ValueTask _ ->
-        appendLine builder "    |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
+        appendLine builder "      |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
     | ReturnShape.ValueTaskResult _ ->
-        appendLine builder "    |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
-        appendLine builder "    |> Eff.bind Eff.ofResult"
+        appendLine builder "      |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
+        appendLine builder "      |> Eff.bind Eff.ofResult"
     | ReturnShape.Eff(_, _, environmentType) ->
         if environmentType = "unit" then
-          appendLine builder "    |> Eff.map (Eff.provideFrom (fun _ -> ()))"
-          appendLine builder "    |> Eff.flatten"
-        elif environmentType = effectInterface.EnvironmentName || environmentType = $"#{effectInterface.EnvironmentName}" then
-          appendLine builder "    |> Eff.flatten"
+          appendLine builder "      |> Eff.map (Eff.provideFrom (fun _ -> ()))"
+          appendLine builder "      |> Eff.flatten"
+        elif environmentType = effectInterface.EnvironmentName
+             || environmentType = $"#{effectInterface.EnvironmentName}"
+             || environmentType = effectInterface.ServiceName
+             || environmentType = $"#{effectInterface.ServiceName}"
+             || environmentType = effectInterface.ServiceTypeName
+             || environmentType = $"#{effectInterface.ServiceTypeName}" then
+          appendLine builder "      |> Eff.flatten"
         elif effectInterface.InheritedEnvironments |> List.contains environmentType then
           appendLine
             builder
-            $"    |> Eff.map (Eff.provideFrom (fun (outer: #{effectInterface.EnvironmentName}) -> outer :> {environmentType}))"
+            $"      |> Eff.map (Eff.provideFrom (fun (outer: #{effectInterface.EnvironmentName}) -> outer :> {environmentType}))"
 
-          appendLine builder "    |> Eff.flatten"
+          appendLine builder "      |> Eff.flatten"
         else
           failwith $"Unsupported Eff environment adaptation target in W4: {environmentType}"
     | ReturnShape.Unsupported _ -> ()
@@ -106,17 +116,20 @@ module Emission =
 
     appendLine builder "open EffSharp.Core"
 
-    appendLine builder ""
-    appendLine builder $"type {effectInterface.EnvironmentName} ="
+    if effectInterface.Mode = Mode.Wrap then
+      appendLine builder ""
+      appendLine builder $"type {effectInterface.EnvironmentName} ="
 
-    if effectInterface.InheritedEnvironments.IsEmpty then
-      appendLine builder $"  abstract {effectInterface.PropertyName}: {effectInterface.ServiceTypeName}"
-    else
-      for inheritedEnvironment in effectInterface.InheritedEnvironments do
-        appendLine builder $"  inherit {inheritedEnvironment}"
+      if effectInterface.InheritedEnvironments.IsEmpty then
+        appendLine builder $"  abstract {effectInterface.PropertyName}: {effectInterface.ServiceTypeName}"
+      else
+        for inheritedEnvironment in effectInterface.InheritedEnvironments do
+          appendLine builder $"  inherit {inheritedEnvironment}"
 
     appendLine builder ""
-    appendLine builder $"module {effectInterface.EnvironmentName} ="
+    appendLine builder "[<AutoOpen>]"
+    appendLine builder $"module Generated_{effectInterface.ServiceName} ="
+    appendLine builder $"  type {effectInterface.ServiceName} with"
 
     effectInterface.Methods |> List.iter (emitMethod builder effectInterface)
 

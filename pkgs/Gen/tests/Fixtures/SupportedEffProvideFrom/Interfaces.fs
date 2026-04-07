@@ -6,5 +6,5 @@ open EffSharp.Gen
 type IRuntimeEnv =
   abstract RuntimeService: IRuntimeService
 
-and [<Effect>] IRuntimeService =
+and [<Effect(Mode.Wrap)>] IRuntimeService =
   abstract Spawn: Job -> Eff<JobHandle<JobResult>, SpawnError, IRuntimeEnv>
