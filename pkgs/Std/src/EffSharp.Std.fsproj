@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>EffSharp.Std</PackageId>
+    <Version>0.0.1</Version>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/vmenge/EffSharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/vmenge/EffSharp</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ValueOption.fs" />
+    <Compile Include="Option.fs" />
+    <Compile Include="String.fs" />
+    <Compile Include="Path.fs" />
+    <Compile Include="Fs.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\src\Core.fsproj" />
+    <ProjectReference Include="..\..\Gen\src\Gen.fsproj" />
+  </ItemGroup>
+
+</Project>
