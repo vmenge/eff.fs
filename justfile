@@ -59,15 +59,10 @@ test *args:
       exit 0; \
     fi; \
     while IFS= read -r project; do \
-      project_dir=$(dirname "$project"); \
-      project_name=$(basename "$project" .fsproj); \
-      dll_path="$project_dir/bin/Debug/net10.0/$project_name.dll"; \
-      echo "==> dotnet build $project"; \
-      dotnet build "$project" --nologo -m:1; \
-      echo "==> dotnet $dll_path"; \
+      echo "==> dotnet run --project $project"; \
       if [ -n "$test_case_filter" ]; then \
-        dotnet "$dll_path" --filter-test-case "$test_case_filter"; \
+        dotnet run --project "$project" -- --filter-test-case "$test_case_filter"; \
       else \
-        dotnet "$dll_path"; \
+        dotnet run --project "$project"; \
       fi; \
     done <<< "$projects"

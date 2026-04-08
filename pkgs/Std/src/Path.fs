@@ -29,29 +29,19 @@ type PathComponent =
 /// the path value itself and are completely pure unlike the regular dotnet
 /// library ones.
 module Path =
-  [<AutoOpen>]
-  module private Helpers =
-    [<Literal>]
-    let WindowsSeparator = '\\'
+  [<Literal>]
+  let private WindowsSeparator = '\\'
 
-    [<Literal>]
-    let UnixSeparator = '/'
+  [<Literal>]
+  let private UnixSeparator = '/'
 
-    [<Literal>]
-    let Separator =
+  [<Literal>]
+  let private Separator =
 #if WINDOWS
-      WindowsSeparator
+    WindowsSeparator
 #else
-      UnixSeparator
+    UnixSeparator
 #endif
-
-  /// Creates a new `Path`. A `Path` does not guarantee that the path exists, is valid for all host APIs,
-  /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
-  let make (str: string) = Path str
-  /// Returns a reference to the underlying `string`
-  let toString (Path str) = str
-
-  let parent (Path p) : Path Option = failwith "todo"
 
   let getPrefixAndRoot (Path p) : string option * string option =
     let isDrive (p: string) =
@@ -95,6 +85,46 @@ module Path =
 
     | _ -> None, None
 
+  let private prefixRootTail p =
+    let prefix, root = getPrefixAndRoot p
+
+    let prefixRootLen =
+      let prefixLen = prefix |> Option.map String.len |> Option.defaultValue 0
+      let rootLen = root |> Option.map String.len |> Option.defaultValue 0
+      prefixLen + rootLen
+
+    let tail =
+      let (Path str) = p
+      str |> String.substringFrom prefixRootLen |> Option.defaultValue str
+
+    prefix, root, tail
+
+  /// Creates a new `Path`. A `Path` does not guarantee that the path exists, is valid for all host APIs,
+  /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
+  let make (str: string) = Path str
+
+  /// Returns a reference to the underlying `string`
+  let toString (Path str) = str
+
+  /// Returns the parent directory of the path, or None if the path
+  /// terminates in a root, prefix, or is empty.
+  let parent p : Path Option =
+    let prefix, root, tail = prefixRootTail p
+    let tail = tail |> String.trimEndOf [| WindowsSeparator; UnixSeparator |]
+
+    tail
+    |> String.revSplitOnceOf [| string WindowsSeparator; string UnixSeparator |]
+    |> Option.map fst
+    |> Option.orElseWith (fun () ->
+      Some tail |> Option.reject String.isNullOrEmpty |> Option.set ""
+    )
+    |> Option.map (fun prnt ->
+      (Option.defaultValue "" prefix)
+      + (Option.defaultValue "" root)
+      + prnt
+      |> Path
+    )
+
   let isAbsolute p = getPrefixAndRoot p |> snd |> Option.isSome
   let isRelative p = getPrefixAndRoot p |> snd |> Option.isNone
 
@@ -106,16 +136,7 @@ module Path =
     if isEmpty p then
       Seq.empty
     else
-      let (Path str) = p
-      let prefix, root = getPrefixAndRoot p
-
-      let prefixRootLen =
-        let prefixLen = prefix |> Option.map String.len |> Option.defaultValue 0
-        let rootLen = root |> Option.map String.len |> Option.defaultValue 0
-        prefixLen + rootLen
-
-      let tail =
-        str |> String.substringFrom prefixRootLen |> Option.defaultValue str
+      let prefix, root, tail = prefixRootTail p
 
       let segments =
         tail |> String.splitBy [| WindowsSeparator; UnixSeparator |]
@@ -149,16 +170,7 @@ module Path =
     if isEmpty p then
       Error(NormalizeErr "Cannot normalize a null or empty path.")
     else
-      let (Path str) = p
-      let prefix, root = getPrefixAndRoot p
-
-      let prefixRootLen =
-        let prefixLen = prefix |> Option.map String.len |> Option.defaultValue 0
-        let rootLen = root |> Option.map String.len |> Option.defaultValue 0
-        prefixLen + rootLen
-
-      let tail =
-        str |> String.substringFrom prefixRootLen |> Option.defaultValue str
+      let prefix, root, tail = prefixRootTail p
 
       let segments =
         tail |> String.splitBy [| WindowsSeparator; UnixSeparator |]

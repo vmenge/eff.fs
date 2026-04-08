@@ -226,10 +226,90 @@ module Path =
         )
     ]
 
+  let private expectParent expected path =
+    let actual = path |> Path.make |> Path.parent |> Option.map Path.toString
+    Expect.equal actual expected ""
+
+  let private parent =
+    testList "parent" [
+      testCase
+        "returns the parent directory for a nested path"
+        (fun () -> "a/b/c" |> expectParent (Some "a/b"))
+
+      testCase
+        "returns Some empty for a single-component relative path"
+        (fun () -> "a" |> expectParent (Some ""))
+
+      testCase
+        "returns None for an empty path"
+        (fun () -> "" |> expectParent None)
+
+      testCase
+        "returns None for root"
+        (fun () -> "/" |> expectParent None)
+
+      testCase
+        "returns Some root for a file under root"
+        (fun () -> "/a" |> expectParent (Some "/"))
+
+      testCase
+        "returns the parent for a deeper absolute path"
+        (fun () -> "/a/b" |> expectParent (Some "/a"))
+
+      testCase
+        "strips a trailing separator before determining the parent"
+        (fun () -> "a/b/" |> expectParent (Some "a"))
+
+      testCase
+        "returns None for a windows drive root"
+        (fun () -> @"C:\" |> expectParent None)
+
+      testCase
+        "returns the drive root for a file under a drive"
+        (fun () -> @"C:\a" |> expectParent (Some @"C:\"))
+
+      testCase
+        "returns the parent for a deeper windows path"
+        (fun () -> @"C:\a\b" |> expectParent (Some @"C:\a"))
+
+      testCase
+        "returns None for a unc root"
+        (fun () -> @"\\server\share\" |> expectParent None)
+
+      testCase
+        "returns the unc root for a file under a unc share"
+        (fun () -> @"\\server\share\a" |> expectParent (Some @"\\server\share\"))
+
+      testCase
+        "returns None for double slash"
+        (fun () -> "//" |> expectParent None)
+
+      testCase
+        "returns None for a drive prefix without root or file"
+        (fun () -> "C:" |> expectParent None)
+
+      testCase
+        "returns Some empty for dot"
+        (fun () -> "." |> expectParent (Some ""))
+
+      testCase
+        "returns Some empty for dot-dot"
+        (fun () -> ".." |> expectParent (Some ""))
+
+      testCase
+        "strips multiple trailing separators before determining the parent"
+        (fun () -> "a/b//" |> expectParent (Some "a"))
+
+      testCase
+        "returns Some empty for a whitespace-only path"
+        (fun () -> " " |> expectParent (Some ""))
+    ]
+
   let tests =
     testList "Path" [
       getPrefixAndRoot
       isEmpty
       normalizeLexically
       components
+      parent
     ]

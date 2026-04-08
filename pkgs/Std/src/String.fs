@@ -3,6 +3,11 @@ namespace EffSharp.Std
 open System
 
 module String =
+  /// Removes trailing occurrences of the given character from the string.
+  let trimEnd (ch: char) (str: string) = str.TrimEnd(ch)
+  /// Removes trailing occurrences of any of the given characters from the string.
+  let trimEndOf (chars: char array) (str: string) = str.TrimEnd(chars)
+
   /// Returns true if the string is null or empty.
   let isNullOrEmpty (str: string) = String.IsNullOrEmpty str
   /// Returns true if the string is null, empty, or consists only of whitespace.
