@@ -29,6 +29,22 @@ type PathComponent =
 /// the path value itself and are completely pure unlike the regular dotnet
 /// library ones.
 module Path =
+  [<AutoOpen>]
+  module private Helpers =
+    [<Literal>]
+    let WindowsSeparator = '\\'
+
+    [<Literal>]
+    let UnixSeparator = '/'
+
+    [<Literal>]
+    let Separator =
+#if WINDOWS
+      WindowsSeparator
+#else
+      UnixSeparator
+#endif
+
   /// Creates a new `Path`. A `Path` does not guarantee that the path exists, is valid for all host APIs,
   /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
   let make (str: string) = Path str
@@ -61,7 +77,6 @@ module Path =
         |> Option.map fst
         |> Option.reject ((=) "..")
         |> Option.reject ((=) ".")
-        |> Option.reject String.isNullOrWhiteSpace
 
       let prefix =
         Option.zip host share
@@ -102,9 +117,10 @@ module Path =
       let tail =
         str |> String.substringFrom prefixRootLen |> Option.defaultValue str
 
-      let segments = tail |> String.splitBy [| '\\'; '/' |]
+      let segments =
+        tail |> String.splitBy [| WindowsSeparator; UnixSeparator |]
 
-      let normalized = ResizeArray<PathComponent>()
+      let normalized = Vec()
 
       prefix |> Option.map Prefix |> Option.iter normalized.Add
       root |> Option.set RootDir |> Option.iter normalized.Add
@@ -112,7 +128,7 @@ module Path =
       let isAbsolute = isAbsolute p
 
       for segment in segments do
-        let prev = normalized |> Seq.tryLast
+        let prev = Vec.last normalized
 
         match (segment, prev) with
         | "", _ -> ()
@@ -126,7 +142,10 @@ module Path =
 
   /// Normalize a path, including .. without traversing the filesystem.
   /// Returns an error if normalization would leave leading .. components.
-  let normalizeLexically (p: Path) : Result<Path, PathErr> =
+  let normalizeLexicallyWith
+    (separator: char)
+    (p: Path)
+    : Result<Path, PathErr> =
     if isEmpty p then
       Error(NormalizeErr "Cannot normalize a null or empty path.")
     else
@@ -141,9 +160,10 @@ module Path =
       let tail =
         str |> String.substringFrom prefixRootLen |> Option.defaultValue str
 
-      let segments = tail |> String.splitBy [| '\\'; '/' |]
+      let segments =
+        tail |> String.splitBy [| WindowsSeparator; UnixSeparator |]
 
-      let normalized = ResizeArray<string>()
+      let normalized = Vec()
 
       let isAbsolute = isAbsolute p
       let isRelative = isRelative p
@@ -159,7 +179,7 @@ module Path =
         | "..", Some _ -> normalized.RemoveAt(normalized.Count - 1)
         | _ -> normalized.Add segment
 
-      let joined = normalized |> String.joinWith Path.DirectorySeparatorChar
+      let joined = normalized |> String.joinWith separator
 
       let prefixRoot =
         match prefix, root with
@@ -177,6 +197,8 @@ module Path =
         "Relative paths cannot start with '..'" |> NormalizeErr |> Error
       else
         Ok(Path path)
+
+  let normalizeLexically = normalizeLexicallyWith Separator
 
   let endsWith (str: string) (Path p) : bool = failwith "todo"
   let startsWith (str: string) (Path p) : bool = failwith "todo"

@@ -5,6 +5,7 @@ open EffSharp.Std
 
 module Path =
   let private normalize path = Path.make path |> Path.normalizeLexically
+  let private normalizeWith sep path = Path.make path |> Path.normalizeLexicallyWith sep
 
   let private expectNormalized expected actual =
     match actual with
@@ -125,30 +126,30 @@ module Path =
 
       testCase
         "preserves a drive prefix and root when normalizing a fully qualified drive path"
-        (fun () -> normalize @"C:\a\..\b" |> expectNormalized @"C:\b")
+        (fun () -> normalizeWith '\\' @"C:\a\..\b" |> expectNormalized @"C:\b")
 
       testCase
         "preserves a drive prefix when normalizing a drive-relative path"
-        (fun () -> normalize @"C:a\..\b" |> expectNormalized @"C:b")
+        (fun () -> normalizeWith '\\' @"C:a\..\b" |> expectNormalized @"C:b")
 
       testCase
         "errors on a drive-relative path whose normalization would leave a leading parent segment"
-        (fun () -> normalize @"C:..\b" |> expectNormalizeErr)
+        (fun () -> normalizeWith '\\' @"C:..\b" |> expectNormalizeErr)
 
       testCase
         "preserves a unc prefix and root when normalizing a unc path"
         (fun () ->
-          normalize @"\\server\share\dir\..\x"
+          normalizeWith '\\' @"\\server\share\dir\..\x"
           |> expectNormalized @"\\server\share\x"
         )
 
       testCase
         "treats a malformed unc-like path as rooted when normalizing lexically"
-        (fun () -> normalize @"\\server\..\x" |> expectNormalized @"\x")
+        (fun () -> normalizeWith '\\' @"\\server\..\x" |> expectNormalized @"\x")
 
       testCase
         "windows rooted but not fully qualified paths should not preserve rooted-only semantics"
-        (fun () -> normalize "\\..\\a" |> expectNormalized "\\a")
+        (fun () -> normalizeWith '\\' "\\..\\a" |> expectNormalized "\\a")
     ]
 
   let private components =
