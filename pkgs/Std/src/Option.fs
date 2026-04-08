@@ -19,3 +19,8 @@ module Option =
       f v |> ignore
       o1
     | None -> o1
+
+  let set v o =
+    match o with
+    | Some _ -> Some v
+    | None -> None

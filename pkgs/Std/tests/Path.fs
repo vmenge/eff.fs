@@ -1,6 +1,5 @@
 namespace EffSharp.Std.Tests
 
-open System
 open Expecto
 open EffSharp.Std
 
@@ -24,42 +23,51 @@ module Path =
 
     Expect.equal actual expected ""
 
-  let private expectRoot expected path =
-    let actual = path |> Path.make |> Path.getRoot
+  let private expectPrefixAndRoot expected path =
+    let actual = path |> Path.make |> Path.getPrefixAndRoot
 
     Expect.equal actual expected ""
 
-  let private getRoot =
-    testList "getRoot" [
+  let private getPrefixAndRoot =
+    testList "getPrefixAndRoot" [
       testCase
-        "returns None for a relative path"
-        (fun () -> "a/b" |> expectRoot None)
+        "returns no prefix and no root for a relative path"
+        (fun () -> "a/b" |> expectPrefixAndRoot (None, None))
 
       testCase
-        "returns None for a dot-relative path"
-        (fun () -> "./a/b" |> expectRoot None)
+        "returns no prefix and no root for a dot-relative path"
+        (fun () -> "./a/b" |> expectPrefixAndRoot (None, None))
 
       testCase
-        "returns root dir for a unix absolute path"
-        (fun () -> "/a/b" |> expectRoot (Some "/"))
+        "returns no prefix and a unix root dir for a unix absolute path"
+        (fun () -> "/a/b" |> expectPrefixAndRoot (None, Some "/"))
 
       testCase
-        "returns root dir for a rooted path without a prefix"
-        (fun () -> "\\a\\b" |> expectRoot (Some @"\"))
+        "returns no prefix and a root dir for a rooted path without a prefix"
+        (fun () -> "\\a\\b" |> expectPrefixAndRoot (None, Some @"\"))
 
       testCase
-        "returns a drive prefix without the root separator for a drive-relative path"
-        (fun () -> @"C:a\b" |> expectRoot (Some "C:"))
+        "returns a drive prefix without a root dir for a drive-relative path"
+        (fun () -> @"C:a\b" |> expectPrefixAndRoot (Some "C:", None))
 
       testCase
-        "returns a drive prefix plus root separator for a fully qualified drive path"
-        (fun () -> @"C:\a\b" |> expectRoot (Some @"C:\"))
+        "returns a drive prefix and a root dir for a fully qualified drive path"
+        (fun () -> @"C:\a\b" |> expectPrefixAndRoot (Some "C:", Some @"\"))
 
       testCase
-        "returns a unc prefix plus root separator for a unc path"
+        "returns a unc prefix and a root dir for a unc path"
         (fun () ->
-          @"\\server\share\dir" |> expectRoot (Some @"\\server\share\")
+          @"\\server\share\dir"
+          |> expectPrefixAndRoot (Some @"\\server\share", Some @"\")
         )
+
+      testCase
+        "treats a malformed unc-like path without a share as a rooted path without a prefix"
+        (fun () -> @"\\server" |> expectPrefixAndRoot (None, Some @"\"))
+
+      testCase
+        "treats a malformed unc-like path with an empty share as a rooted path without a prefix"
+        (fun () -> @"\\server\" |> expectPrefixAndRoot (None, Some @"\"))
     ]
 
   let private isEmpty =
@@ -116,11 +124,31 @@ module Path =
         (fun () -> normalize "foo/bar/" |> expectNormalized "foo/bar")
 
       testCase
-        "windows rooted but not fully qualified paths should not preserve rooted-only semantics"
+        "preserves a drive prefix and root when normalizing a fully qualified drive path"
+        (fun () -> normalize @"C:\a\..\b" |> expectNormalized @"C:\b")
+
+      testCase
+        "preserves a drive prefix when normalizing a drive-relative path"
+        (fun () -> normalize @"C:a\..\b" |> expectNormalized @"C:b")
+
+      testCase
+        "errors on a drive-relative path whose normalization would leave a leading parent segment"
+        (fun () -> normalize @"C:..\b" |> expectNormalizeErr)
+
+      testCase
+        "preserves a unc prefix and root when normalizing a unc path"
         (fun () ->
-          if OperatingSystem.IsWindows() then
-            normalize "\\..\\a" |> expectNormalized "\\a"
+          normalize @"\\server\share\dir\..\x"
+          |> expectNormalized @"\\server\share\x"
         )
+
+      testCase
+        "treats a malformed unc-like path as rooted when normalizing lexically"
+        (fun () -> normalize @"\\server\..\x" |> expectNormalized @"\x")
+
+      testCase
+        "windows rooted but not fully qualified paths should not preserve rooted-only semantics"
+        (fun () -> normalize "\\..\\a" |> expectNormalized "\\a")
     ]
 
   let private components =
@@ -169,43 +197,38 @@ module Path =
       testCase
         "recognizes a unix root directory"
         (fun () ->
-          if not (OperatingSystem.IsWindows()) then
-            "/a/b" |> expectComponents [ RootDir; Normal "a"; Normal "b" ]
+          "/a/b" |> expectComponents [ RootDir; Normal "a"; Normal "b" ]
         )
 
       testCase
         "recognizes a windows drive prefix and root separately"
         (fun () ->
-          if OperatingSystem.IsWindows() then
-            @"C:\a\b"
-            |> expectComponents [
-              Prefix "C:"
-              RootDir
-              Normal "a"
-              Normal "b"
-            ]
+          @"C:\a\b"
+          |> expectComponents [ Prefix "C:"; RootDir; Normal "a"; Normal "b" ]
         )
 
       testCase
         "recognizes a windows drive prefix without a root"
         (fun () ->
-          if OperatingSystem.IsWindows() then
-            @"C:a\b"
-            |> expectComponents [ Prefix "C:"; Normal "a"; Normal "b" ]
+          @"C:a\b" |> expectComponents [ Prefix "C:"; Normal "a"; Normal "b" ]
         )
 
       testCase
         "recognizes a windows unc prefix and root separately"
         (fun () ->
-          if OperatingSystem.IsWindows() then
-            @"\\server\share\dir"
-            |> expectComponents [
-              Prefix @"\\server\share"
-              RootDir
-              Normal "dir"
-            ]
+          @"\\server\share\dir"
+          |> expectComponents [
+            Prefix @"\\server\share"
+            RootDir
+            Normal "dir"
+          ]
         )
     ]
 
   let tests =
-    testList "Path" [ getRoot; isEmpty; normalizeLexically; components ]
+    testList "Path" [
+      getPrefixAndRoot
+      isEmpty
+      normalizeLexically
+      components
+    ]

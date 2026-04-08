@@ -26,7 +26,8 @@ type PathComponent =
 /// Lexical operations over `Path` values.
 ///
 /// Functions in this module do not access the filesystem. They operate only on
-/// the path value itself.
+/// the path value itself and are completely pure unlike the regular dotnet
+/// library ones.
 module Path =
   /// Creates a new `Path`. A `Path` does not guarantee that the path exists, is valid for all host APIs,
   /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
@@ -36,38 +37,51 @@ module Path =
 
   let parent (Path p) : Path Option = failwith "todo"
 
-  let isAbsolute (Path p) : bool = Path.IsPathFullyQualified p
-  let isRelative (Path p) : bool = not <| Path.IsPathFullyQualified p
-
-  let getRoot (Path p) : string option =
+  let getPrefixAndRoot (Path p) : string option * string option =
     let isDrive (p: string) =
       let firstIsChar = p |> Seq.tryItem 0 |> Option.exists Char.IsAsciiLetter
       let sndIsColon = p |> Seq.tryItem 1 |> Option.exists ((=) ':')
       firstIsChar && sndIsColon
 
     match p with
-    | _ when String.startsWith "/" p -> Some "/"
-    | _ when String.startsWith "\\\\server" p ->
-      p
-      |> String.splitOnce "\\\\server\\"
-      |> Option.map snd
-      |> Option.bind (String.splitOnce "\\")
-      |> Option.map fst
-      |> Option.map (fun rest -> $"\\\\server\\{rest}\\")
+    | _ when String.startsWith "/" p -> None, Some "/"
+    | _ when String.startsWith "\\\\" p ->
+      let hostAndRest =
+        p
+        |> String.splitOnce "\\\\"
+        |> Option.map snd
+        |> Option.bind (String.splitOnce "\\")
 
-    | _ when String.startsWith "\\\\" p -> Some "\\"
+      let host = hostAndRest |> Option.map fst
 
-    | _ when String.startsWith "\\" p -> Some "\\"
+      let share =
+        hostAndRest
+        |> Option.map snd
+        |> Option.bind (String.splitOnce "\\")
+        |> Option.map fst
+        |> Option.reject ((=) "..")
+        |> Option.reject ((=) ".")
+        |> Option.reject String.isNullOrWhiteSpace
+
+      let prefix =
+        Option.zip host share
+        |> Option.map (fun (host, share) -> $"\\\\{host}\\{share}")
+
+      prefix, Some "\\"
+
+    | _ when String.startsWith "\\" p -> None, Some "\\"
 
     | _ when isDrive p ->
-      let subStrLen =
-        match Seq.tryItem 2 p with
-        | Some '\\' -> 3
-        | _ -> 2
+      let root =
+        Seq.tryItem 2 p |> Option.filter ((=) '\\') |> Option.map string
 
-      String.substring 0 subStrLen p
+      let prefix = String.substring 0 2 p
+      prefix, root
 
-    | _ -> None
+    | _ -> None, None
+
+  let isAbsolute p = getPrefixAndRoot p |> snd |> Option.isSome
+  let isRelative p = getPrefixAndRoot p |> snd |> Option.isNone
 
   let isEmpty (Path p) : bool = String.len p = 0
 
@@ -78,24 +92,22 @@ module Path =
       Seq.empty
     else
       let (Path str) = p
-      let root = getRoot p
+      let prefix, root = getPrefixAndRoot p
+
+      let prefixRootLen =
+        let prefixLen = prefix |> Option.map String.len |> Option.defaultValue 0
+        let rootLen = root |> Option.map String.len |> Option.defaultValue 0
+        prefixLen + rootLen
 
       let tail =
-        root
-        |> Option.bind (fun root -> String.substringFrom (String.len root) str)
-        |> Option.defaultValue str
+        str |> String.substringFrom prefixRootLen |> Option.defaultValue str
 
       let segments = tail |> String.splitBy [| '\\'; '/' |]
 
       let normalized = ResizeArray<PathComponent>()
 
-      root
-      |> Option.iter (fun root ->
-        if root <> "/" && root <> @"\" then
-          normalized.Add(Prefix root)
-
-        normalized.Add RootDir
-      )
+      prefix |> Option.map Prefix |> Option.iter normalized.Add
+      root |> Option.set RootDir |> Option.iter normalized.Add
 
       let isAbsolute = isAbsolute p
 
@@ -119,12 +131,15 @@ module Path =
       Error(NormalizeErr "Cannot normalize a null or empty path.")
     else
       let (Path str) = p
-      let root = getRoot p
+      let prefix, root = getPrefixAndRoot p
+
+      let prefixRootLen =
+        let prefixLen = prefix |> Option.map String.len |> Option.defaultValue 0
+        let rootLen = root |> Option.map String.len |> Option.defaultValue 0
+        prefixLen + rootLen
 
       let tail =
-        root
-        |> Option.bind (fun root -> String.substringFrom (String.len root) str)
-        |> Option.defaultValue str
+        str |> String.substringFrom prefixRootLen |> Option.defaultValue str
 
       let segments = tail |> String.splitBy [| '\\'; '/' |]
 
@@ -140,18 +155,25 @@ module Path =
         | "", _
         | ".", _ -> ()
         | "..", None when isAbsolute -> ()
-        | "..", Some ".." -> normalized.Add(segment)
+        | "..", Some ".." -> normalized.Add segment
         | "..", Some _ -> normalized.RemoveAt(normalized.Count - 1)
-        | _ -> normalized.Add(segment)
+        | _ -> normalized.Add segment
 
       let joined = normalized |> String.joinWith Path.DirectorySeparatorChar
 
+      let prefixRoot =
+        match prefix, root with
+        | Some p, Some r -> Some(p + r)
+        | Some p, None -> Some p
+        | None, Some r -> Some r
+        | None, None -> None
+
       let path =
-        match root with
-        | Some root -> root + joined
+        match prefixRoot with
+        | Some pr -> pr + joined
         | None -> if String.len joined > 0 then joined else "."
 
-      if String.startsWith ".." path && isRelative then
+      if String.startsWith ".." joined && isRelative then
         "Relative paths cannot start with '..'" |> NormalizeErr |> Error
       else
         Ok(Path path)
