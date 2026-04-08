@@ -55,8 +55,8 @@ module Path =
 
   let getPrefixAndRoot (Path p) : string option * string option =
     let isDrive (p: string) =
-      let firstIsChar = p |> Seq.tryItem 0 |> Option.exists Char.IsAsciiLetter
-      let sndIsColon = p |> Seq.tryItem 1 |> Option.exists ((=) ':')
+      let firstIsChar = p |> String.item 0 |> Option.exists Char.IsAsciiLetter
+      let sndIsColon = p |> String.item 1 |> Option.exists ((=) ':')
       firstIsChar && sndIsColon
 
     match p with
@@ -88,7 +88,7 @@ module Path =
 
     | _ when isDrive p ->
       let root =
-        Seq.tryItem 2 p |> Option.filter ((=) '\\') |> Option.map string
+        String.item 2 p |> Option.filter ((=) '\\') |> Option.map string
 
       let prefix = String.substring 0 2 p
       prefix, root
@@ -169,7 +169,7 @@ module Path =
       let isRelative = isRelative p
 
       for segment in segments do
-        let prev = normalized |> Seq.tryItem (normalized.Count - 1)
+        let prev = normalized |> Vec.last
 
         match (segment, prev) with
         | "", _

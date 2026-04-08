@@ -90,39 +90,39 @@ module Path =
     testList "normalizeLexically" [
       testCase
         "removes dot-dot segments lexically"
-        (fun () -> normalize "a/b/../c" |> expectNormalized "a/c")
+        (fun () -> normalizeWith '/' "a/b/../c" |> expectNormalized "a/c")
 
       testCase
         "removes dot segments and repeated separators"
-        (fun () -> normalize "./a//b/." |> expectNormalized "a/b")
+        (fun () -> normalizeWith '/' "./a//b/." |> expectNormalized "a/b")
 
       testCase
         "errors on a leading relative parent segment"
-        (fun () -> normalize "../a" |> expectNormalizeErr)
+        (fun () -> normalizeWith '/' "../a" |> expectNormalizeErr)
 
       testCase
         "errors on multiple leading relative parent segments"
-        (fun () -> normalize "../../a" |> expectNormalizeErr)
+        (fun () -> normalizeWith '/' "../../a" |> expectNormalizeErr)
 
       testCase
         "errors when cancellation would leave a leading relative parent segment"
-        (fun () -> normalize "a/../../b" |> expectNormalizeErr)
+        (fun () -> normalizeWith '/' "a/../../b" |> expectNormalizeErr)
 
       testCase
         "clamps absolute paths at the root"
-        (fun () -> normalize "/a/../../b" |> expectNormalized "/b")
+        (fun () -> normalizeWith '/' "/a/../../b" |> expectNormalized "/b")
 
       testCase
         "returns dot when a relative path collapses to empty"
-        (fun () -> normalize "a/.." |> expectNormalized ".")
+        (fun () -> normalizeWith '/' "a/.." |> expectNormalized ".")
 
       testCase
         "treats whitespace-only paths as lexical paths instead of empty input"
-        (fun () -> normalize " " |> expectNormalized " ")
+        (fun () -> normalizeWith '/' " " |> expectNormalized " ")
 
       testCase
         "drops a trailing separator after lexical normalization"
-        (fun () -> normalize "foo/bar/" |> expectNormalized "foo/bar")
+        (fun () -> normalizeWith '/' "foo/bar/" |> expectNormalized "foo/bar")
 
       testCase
         "preserves a drive prefix and root when normalizing a fully qualified drive path"
