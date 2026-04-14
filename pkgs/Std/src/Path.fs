@@ -282,6 +282,9 @@ module Path =
       | _ -> None
     )
 
+  /// Strips the given prefix from the path using the specified separator,
+  /// returning the remaining relative tail. Returns an error if the prefix
+  /// does not match.
   let stripPrefixWith sep prefix path : Result<Path, PathErr> =
     let prefixComponents = components prefix
     let components = components path
@@ -331,8 +334,13 @@ module Path =
         |> Path
         |> Ok
 
+  /// Strips the given prefix from the path using the OS separator.
+  /// Returns an error if the prefix does not match.
   let stripPrefix = stripPrefixWith Separator
 
+  /// Returns the portion of the file name before the first dot.
+  /// For dotfiles, the leading dot is considered part of the name.
+  /// Returns None if there is no file name.
   let filePrefix path =
     fileName path
     |> Option.bind (fun fname ->
@@ -348,6 +356,9 @@ module Path =
       |> Option.map (fun x -> $"{before}{x}")
     )
 
+  /// Returns the portion of the file name before the last dot.
+  /// For dotfiles, the leading dot is considered part of the name.
+  /// Returns None if there is no file name.
   let fileStem path =
     fileName path
     |> Option.bind (fun fname ->
@@ -363,8 +374,13 @@ module Path =
       |> Option.map (fun x -> $"{before}{x}")
     )
 
-  let hasTrailingSep (Path p) : bool = failwith "todo"
-  let trimTrailingSep (Path p) : Path = failwith "todo"
+  /// Returns true if the path ends with a separator character.
+  let hasTrailingSep (Path p) =
+    p.EndsWith UnixSeparator || p.EndsWith WindowsSeparator
+
+  /// Removes trailing separator characters from the path.
+  let trimTrailingSep (Path p) =
+    String.trimEndOf [| UnixSeparator; WindowsSeparator |] p
 
   let combine (segment: string) (Path p) : Path = failwith "todo"
   let join (Path p2) (Path p1) : Path = failwith "todo"
