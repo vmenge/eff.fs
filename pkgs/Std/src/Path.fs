@@ -8,7 +8,7 @@ open System.IO
 /// A `Path` does not guarantee that the path exists, is valid for all host APIs,
 /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
 [<Struct>]
-type Path = private Path of string
+type Path = Path of string
 
 [<Struct>]
 type PathErr =
@@ -116,10 +116,6 @@ module Path =
       str |> String.substringFrom prefixRootLen |> Option.defaultValue str
 
     prefix, root, tail
-
-  /// Creates a new `Path`. A `Path` does not guarantee that the path exists, is valid for all host APIs,
-  /// or refers to a file, directory, or symlink. Those questions belong to `Fs`.
-  let make (str: string) = Path str
 
   /// Returns a reference to the underlying `string`
   let toString (Path str) = str

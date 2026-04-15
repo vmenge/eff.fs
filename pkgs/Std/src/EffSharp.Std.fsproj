@@ -19,7 +19,8 @@
     <Compile Include="String.fs" />
     <Compile Include="Path.fs" />
     <Compile Include="Fs.fs" />
-    <Compile Include="Fs.Provider.fs" />
+    <Compile Include="Console.fs" />
+    <Compile Include="Clock.fs" />
   </ItemGroup>
 
   <ItemGroup>
