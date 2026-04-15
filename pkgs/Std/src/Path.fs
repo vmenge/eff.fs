@@ -186,9 +186,6 @@ module Path =
 
       normalized
 
-  /// Reconstructs a path from a sequence of components.
-  let ofComponents (components: PathComponent seq) : Path = failwith "todo"
-
   /// Normalizes the path lexically using the given separator, collapsing
   /// dot and dot-dot segments without accessing the filesystem.
   /// Returns an error if normalization would leave leading dot-dot components.
