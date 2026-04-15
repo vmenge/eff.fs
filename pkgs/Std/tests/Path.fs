@@ -4,10 +4,10 @@ open Expecto
 open EffSharp.Std
 
 module Path =
-  let private normalize path = Path.make path |> Path.normalizeLexically
+  let private normalize path = Path path |> Path.normalizeLexically
 
   let private normalizeWith sep path =
-    Path.make path |> Path.normalizeLexicallyWith sep
+    Path path |> Path.normalizeLexicallyWith sep
 
   let private expectNormalized expected actual =
     match actual with
@@ -22,12 +22,12 @@ module Path =
     | Error err -> failtest $"expected NormalizeErr, got %A{err}"
 
   let private expectComponents expected path =
-    let actual = path |> Path.make |> Path.components |> Seq.toList
+    let actual = path |> Path |> Path.components |> Seq.toList
 
     Expect.equal actual expected ""
 
   let private expectPrefixAndRoot expected path =
-    let actual = path |> Path.make |> Path.getPrefixAndRoot
+    let actual = path |> Path |> Path.getPrefixAndRoot
 
     Expect.equal actual expected ""
 
@@ -84,15 +84,15 @@ module Path =
     testList "isEmpty" [
       testCase
         "returns true for the empty string"
-        (fun () -> Path.make "" |> Path.isEmpty |> Expect.isTrue <| "")
+        (fun () -> Path "" |> Path.isEmpty |> Expect.isTrue <| "")
 
       testCase
         "returns false for whitespace-only lexical paths"
-        (fun () -> Path.make " " |> Path.isEmpty |> Expect.isFalse <| "")
+        (fun () -> Path " " |> Path.isEmpty |> Expect.isFalse <| "")
 
       testCase
         "returns false for non-empty paths"
-        (fun () -> Path.make "foo" |> Path.isEmpty |> Expect.isFalse <| "")
+        (fun () -> Path "foo" |> Path.isEmpty |> Expect.isFalse <| "")
     ]
 
   let private normalizeLexically =
@@ -238,7 +238,7 @@ module Path =
     ]
 
   let private expectParent expected path =
-    let actual = path |> Path.make |> Path.parent |> Option.map Path.toString
+    let actual = path |> Path |> Path.parent |> Option.map Path.toString
     Expect.equal actual expected ""
 
   let private parent =
@@ -317,7 +317,7 @@ module Path =
     ]
 
   let private expectExtension expected path =
-    let actual = path |> Path.make |> Path.extension
+    let actual = path |> Path |> Path.extension
     Expect.equal actual expected ""
 
   let private extension =
@@ -376,8 +376,7 @@ module Path =
       testCase
         "appends an extension to a simple path"
         (fun () ->
-          let result =
-            Path.make "foo" |> Path.withExtension "txt" |> Path.toString
+          let result = Path "foo" |> Path.withExtension "txt" |> Path.toString
 
           Expect.equal result "foo.txt" ""
         )
@@ -386,7 +385,7 @@ module Path =
         "appends an extension to a path that already has one"
         (fun () ->
           let result =
-            Path.make "foo.tar" |> Path.withExtension "gz" |> Path.toString
+            Path "foo.tar" |> Path.withExtension "gz" |> Path.toString
 
           Expect.equal result "foo.tar.gz" ""
         )
@@ -395,14 +394,14 @@ module Path =
         "appends an extension to a nested path"
         (fun () ->
           let result =
-            Path.make "a/b/foo" |> Path.withExtension "txt" |> Path.toString
+            Path "a/b/foo" |> Path.withExtension "txt" |> Path.toString
 
           Expect.equal result "a/b/foo.txt" ""
         )
     ]
 
   let private expectFileName expected path =
-    let actual = path |> Path.make |> Path.fileName
+    let actual = path |> Path |> Path.fileName
     Expect.equal actual expected ""
 
   let private fileName =
@@ -459,7 +458,7 @@ module Path =
     ]
 
   let private expectFilePrefix expected path =
-    let actual = path |> Path.make |> Path.filePrefix
+    let actual = path |> Path |> Path.filePrefix
     Expect.equal actual expected ""
 
   let private filePrefix =
@@ -496,9 +495,7 @@ module Path =
         "returns None for an empty path"
         (fun () -> "" |> expectFilePrefix None)
 
-      testCase
-        "returns None for root"
-        (fun () -> "/" |> expectFilePrefix None)
+      testCase "returns None for root" (fun () -> "/" |> expectFilePrefix None)
 
       testCase
         "returns None for dot-dot"
@@ -514,7 +511,7 @@ module Path =
     ]
 
   let private expectFileStem expected path =
-    let actual = path |> Path.make |> Path.fileStem
+    let actual = path |> Path |> Path.fileStem
     Expect.equal actual expected ""
 
   let private fileStem =
@@ -547,9 +544,7 @@ module Path =
         "returns None for an empty path"
         (fun () -> "" |> expectFileStem None)
 
-      testCase
-        "returns None for root"
-        (fun () -> "/" |> expectFileStem None)
+      testCase "returns None for root" (fun () -> "/" |> expectFileStem None)
 
       testCase
         "returns None for dot-dot"
@@ -566,13 +561,13 @@ module Path =
 
   let private expectStripped sep expected prefix path =
     let result =
-      Path.stripPrefixWith sep (Path.make prefix) (Path.make path)
+      Path.stripPrefixWith sep (Path prefix) (Path path)
       |> Result.map Path.toString
 
     Expect.equal result (Ok expected) ""
 
   let private expectStripErr sep prefix path =
-    let result = Path.stripPrefixWith sep (Path.make prefix) (Path.make path)
+    let result = Path.stripPrefixWith sep (Path prefix) (Path path)
 
     match result with
     | Error(PathErr.StripPrefixErr _) -> ()
@@ -643,8 +638,7 @@ module Path =
     ]
 
   let private expectCombined sep expected segment path =
-    let actual =
-      path |> Path.make |> Path.combineWith sep segment |> Path.toString
+    let actual = path |> Path |> Path.combineWith sep segment |> Path.toString
 
     Expect.equal actual expected ""
 
@@ -708,8 +702,7 @@ module Path =
     ]
 
   let private expectJoined sep expected p2 p1 =
-    let actual =
-      p1 |> Path.make |> Path.joinWith sep (Path.make p2) |> Path.toString
+    let actual = p1 |> Path |> Path.joinWith sep (Path p2) |> Path.toString
 
     Expect.equal actual expected ""
 
@@ -731,9 +724,7 @@ module Path =
         "does not double the separator when base has a trailing separator"
         (fun () -> "a/" |> expectJoined '/' "a/b" "b")
 
-      testCase
-        "appends to root"
-        (fun () -> "/" |> expectJoined '/' "/b" "b")
+      testCase "appends to root" (fun () -> "/" |> expectJoined '/' "/b" "b")
 
       testCase
         "appends to an empty base"

@@ -3,11 +3,11 @@ module EffSharp.Examples.Program
 open EffSharp.Core
 open EffSharp.Std
 open System
-open type EffSharp.Std.Console
+open type EffSharp.Std.Stdio
 
 type AppEnv() =
-  interface Effect.Console with
-    member _.Console = Console.Provider()
+  interface Effect.Stdio with
+    member _.Stdio = Stdio.Provider()
 
   interface Effect.Fs with
     member _.Fs = Fs.Provider()

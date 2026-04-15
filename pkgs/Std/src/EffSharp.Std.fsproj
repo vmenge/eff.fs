@@ -19,7 +19,7 @@
     <Compile Include="String.fs" />
     <Compile Include="Path.fs" />
     <Compile Include="Fs.fs" />
-    <Compile Include="Console.fs" />
+    <Compile Include="Stdio.fs" />
     <Compile Include="Clock.fs" />
     <Compile Include="Env.fs" />
     <Compile Include="Random.fs" />

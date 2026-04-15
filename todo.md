@@ -1,4 +1,4 @@
-random, net, command, stdio perhaps
+net, command
 
 for libs:
 - logging
