@@ -18,12 +18,18 @@ type AppEnv() =
   interface Effect.Env with
     member _.Env = Env.Provider()
 
+  interface Effect.Random with
+    member _.Random = Random.Provider()
+
 let program () = eff {
   let! now = Clock.now ()
   do! println $"starting program at {now}"
 
   let! myvar = Env.get "MYVAR"
   do! println $"MYVAR: {myvar}"
+
+  let! randomval = Random.intRange 1 101
+  do! println $"random val: {randomval}"
 
   return ()
 }

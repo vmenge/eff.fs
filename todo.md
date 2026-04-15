@@ -1,4 +1,4 @@
-random, env, net, command, stdio perhaps
+random, net, command, stdio perhaps
 
 for libs:
 - logging
