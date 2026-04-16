@@ -1,5 +1,6 @@
 namespace EffSharp.Core
 
+open System
 open System.Threading.Tasks
 
 module Eff =
@@ -218,19 +219,48 @@ module Eff =
   let orRaiseWith f eff : Eff<_, unit, _> =
     eff |> orElseWith (fun e -> Eff.Thunk(fun () -> raise (f e)))
 
+  let fork (eff: Eff<'t, 'e, 'env>) : Eff<Fiber<'t, 'e>, 'e, 'env> =
+    Eff.Node(EffNodes.Fork(eff, false))
+
+  let forkOn (eff: Eff<'t, 'e, 'env>) : Eff<Fiber<'t, 'e>, 'e, 'env> =
+    Eff.Node(EffNodes.Fork(eff, true))
+
+  let race (left: Eff<'t, 'e, 'env>) (right: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> =
+    Eff.Node(EffNodes.Race(left, right))
+
+  let all (effects: Eff<'t, 'e, 'env> list) : Eff<'t list, 'e, 'env> =
+    Eff.Node(EffNodes.All(effects))
+
+  let timeout (duration: TimeSpan) (eff: Eff<'t, 'e, 'env>) : Eff<TimeoutResult<'t>, 'e, 'env> =
+    Eff.Node(EffNodes.Timeout(duration, eff))
+
   let runTask (env: 'env) (eff: Eff<'t, 'e, 'env>) : Task<Exit<'t, 'e>> =
-    let stepper = EffRuntime.RuntimeStepper<'env>(env) :> EffRuntime.Stepper<'env>
+    let rootFiber = EffRuntime.FiberHandle(None, new System.Threading.CancellationTokenSource())
+    let stepper =
+      EffRuntime.RuntimeStepper<'env>(env, rootFiber.Token, rootFiber, false)
+      :> EffRuntime.Stepper<'env>
     let machine =
       EffRuntime.TypedMachine<'env>(stepper, stepper.Step eff []) :> EffRuntime.Machine
 
     task {
-      let! exit = EffRuntime.runTaskLoop machine
+      let! exit = EffRuntime.runFiberTask rootFiber machine
 
       match exit with
       | EffRuntime.BoxedOk value -> return Exit.Ok(unbox<'t> value)
       | EffRuntime.BoxedErr err -> return Exit.Err(unbox<'e> err)
+      | EffRuntime.BoxedAborted -> return Exit.Aborted
       | EffRuntime.BoxedExn ex -> return Exit.Exn ex
     }
 
   let runSync (env: 'env) (eff: Eff<'t, 'e, 'env>) : Exit<'t, 'e> =
     runTask env eff |> _.GetAwaiter().GetResult()
+
+module Fiber =
+  let await (fiber: Fiber<'t, 'e>) : Eff<Exit<'t, 'e>, unit, 'env> =
+    Eff.Node(EffNodes.AwaitFiber(fiber))
+
+  let join (fiber: Fiber<'t, 'e>) : Eff<'t, 'e, 'env> =
+    Eff.Node(EffNodes.JoinFiber(fiber))
+
+  let abort (fiber: Fiber<'t, 'e>) : Eff<unit, 'e, 'env> =
+    Eff.Node(EffNodes.AbortFiber(fiber))
