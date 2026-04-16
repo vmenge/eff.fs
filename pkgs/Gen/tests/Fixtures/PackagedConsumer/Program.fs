@@ -21,4 +21,5 @@ let run () =
   match result with
   | Exit.Ok greeting -> greeting
   | Exit.Err err -> failwithf "expected greeting from packaged consumer, got managed error: %A" err
+  | Exit.Aborted -> failwith "packaged consumer greeting was aborted"
   | Exit.Exn ex -> raise ex

@@ -17,6 +17,7 @@ let run () =
   | Exit.Ok "Hello, ordering." -> 0
   | Exit.Ok value -> failwithf "unexpected greeting %A" value
   | Exit.Err err -> failwithf "unexpected managed error %A" err
+  | Exit.Aborted -> failwith "greet was aborted"
   | Exit.Exn ex -> raise ex
 
 [<EntryPoint>]

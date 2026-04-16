@@ -23,4 +23,5 @@ let run () =
   | Exit.Ok () when logger.Messages = [ "hello" ] -> "direct-non-interface-prefix-runtime-ok"
   | Exit.Ok () -> failwithf "logProgram should record one log message, got %A" logger.Messages
   | Exit.Err err -> failwithf "logProgram returned managed error %A" err
+  | Exit.Aborted -> failwith "logProgram was aborted"
   | Exit.Exn ex -> raise ex

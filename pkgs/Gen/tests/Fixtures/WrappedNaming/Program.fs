@@ -39,6 +39,7 @@ let private expectOk expected exit name =
   | Exit.Ok value when value = expected -> ()
   | Exit.Ok value -> failwithf "%s returned %A instead of %A" name value expected
   | Exit.Err err -> failwithf "%s returned managed error %A" name err
+  | Exit.Aborted -> failwithf "%s was aborted" name
   | Exit.Exn ex -> raise ex
 
 let run () =
@@ -57,11 +58,13 @@ let run () =
   match Usage.logProgram () |> Eff.runSync env with
   | Exit.Ok () -> ()
   | Exit.Err err -> failwithf "logProgram returned managed error %A" err
+  | Exit.Aborted -> failwith "logProgram was aborted"
   | Exit.Exn ex -> raise ex
 
   match Usage.oddLogProgram () |> Eff.runSync env with
   | Exit.Ok () -> ()
   | Exit.Err err -> failwithf "oddLogProgram returned managed error %A" err
+  | Exit.Aborted -> failwith "oddLogProgram was aborted"
   | Exit.Exn ex -> raise ex
 
   if logger.Messages <> [ "hello" ] then

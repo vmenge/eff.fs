@@ -23,4 +23,5 @@ let run () =
       "supported-eff-exact-runtime-ok"
   | Exit.Ok value -> failwithf "spawnProgram returned %A" value
   | Exit.Err err -> failwithf "spawnProgram returned managed error %A" err
+  | Exit.Aborted -> failwith "spawnProgram was aborted"
   | Exit.Exn ex -> raise ex

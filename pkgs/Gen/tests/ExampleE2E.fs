@@ -39,7 +39,7 @@ module ExampleE2E =
 
   let tests =
     testSequenced <| testList "ExampleE2E" [
-      testTask "example project builds as a direct-mode Gen consumer in the same build" {
+      testTask "example project builds as a Gen consumer without manual MSBuild imports" {
         let projectText = exampleProjectText ()
 
         Expect.isFalse (projectText.Contains("EffSharp.Gen.props")) "the example should not manually import EffSharp.Gen.props"
@@ -50,16 +50,11 @@ module ExampleE2E =
         Expect.equal result.ExitCode 0 $"example project should build successfully once Gen consumer wiring exists. Output:{System.Environment.NewLine}{result.Output}"
         Expect.isTrue (Directory.Exists(generatedDirectory)) $"example project should emit generated files into {generatedDirectory}"
 
-        let generatedText =
+        let generatedFiles =
           Directory.GetFiles(generatedDirectory, "*.g.fs")
           |> Array.sort
-          |> Array.map File.ReadAllText
-          |> String.concat System.Environment.NewLine
 
-        Expect.stringContains generatedText "type Clock with" "the example should generate callable extensions for Clock"
-        Expect.stringContains generatedText "type Fs with" "the example should generate callable extensions for Fs"
-        Expect.stringContains generatedText "type Log with" "the example should generate callable extensions for Log"
-        Expect.isFalse (generatedText.Contains("type EClock =")) "default direct generation should not emit wrapper interfaces for the example"
+        Expect.equal generatedFiles.Length 0 "the example should not emit local generated files because it declares no [<Effect>] types"
       }
 
       testTask "example project executes generated wrappers at runtime" {
@@ -68,7 +63,9 @@ module ExampleE2E =
 
         let! runResult = runBuiltProject exampleProject
         Expect.equal runResult.ExitCode 0 $"example project should run successfully. Output:{System.Environment.NewLine}{runResult.Output}"
-        Expect.stringContains runResult.Output "file contents: contents from file" "the example entry point should run the current example program"
+        Expect.stringContains runResult.Output "starting program at " "the example should print the current start time"
+        Expect.stringContains runResult.Output "MYVAR:" "the example should print the environment lookup result"
+        Expect.stringContains runResult.Output "random val: " "the example should print the random value"
       }
 
       testTask "packed package includes the generator assembly and transitive MSBuild assets" {

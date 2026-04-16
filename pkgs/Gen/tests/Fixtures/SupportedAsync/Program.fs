@@ -46,6 +46,7 @@ let private expectOk expected exit name =
   | Exit.Ok value when value = expected -> ()
   | Exit.Ok value -> failwithf "%s returned %A instead of %A" name value expected
   | Exit.Err err -> failwithf "%s returned managed error %A" name err
+  | Exit.Aborted -> failwithf "%s was aborted" name
   | Exit.Exn ex -> raise ex
 
 let private runTaskSync env eff =

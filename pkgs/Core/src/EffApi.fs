@@ -53,13 +53,14 @@ module Eff =
 
   let ofAsync async = Eff.Task(fun () -> async () |> Async.StartAsTask)
 
+  let sleep (timespan: TimeSpan) =
+    Eff.Task
+    <| fun () -> task { do! Task.Delay(int timespan.TotalMilliseconds) }
+
   let rec mapErr (f: 'e1 -> 'e2) (ef: Eff<'t, 'e1, 'env>) : Eff<'t, 'e2, 'env> =
     match ef with
     | Eff.Pure v -> Eff.Pure v
-    | Eff.Err e ->
-      Eff.Suspend(fun () ->
-        Eff.Err(f e)
-      )
+    | Eff.Err e -> Eff.Suspend(fun () -> Eff.Err(f e))
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend suspend -> Eff.Suspend(fun () -> mapErr f (suspend ()))
     | Eff.Thunk thunk -> Eff.Thunk thunk
@@ -69,10 +70,7 @@ module Eff =
 
   let rec map f ef =
     match ef with
-    | Eff.Pure v ->
-      Eff.Suspend(fun () ->
-        Eff.Pure(f v)
-      )
+    | Eff.Pure v -> Eff.Suspend(fun () -> Eff.Pure(f v))
     | Eff.Err err -> Eff.Err err
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend suspend -> Eff.Suspend(fun () -> map f (suspend ()))
@@ -88,10 +86,7 @@ module Eff =
 
   let rec bind f ef =
     match ef with
-    | Eff.Pure v ->
-      Eff.Suspend(fun () ->
-        f v
-      )
+    | Eff.Pure v -> Eff.Suspend(fun () -> f v)
     | Eff.Err err -> Eff.Err err
     | Eff.Crash ex -> Eff.Crash ex
     | Eff.Suspend _ -> Eff.Node(EffNodes.FlatMap(ef, f))
@@ -214,7 +209,8 @@ module Eff =
     catch (fun ex -> f ex |> bind (fun _ -> Eff.Crash ex)) eff
 
   let orRaise eff : Eff<_, unit, _> =
-    eff |> orElseWith (fun e -> Eff.Thunk(fun () -> raise (Report.make e)))
+    eff
+    |> orElseWith (fun e -> Eff.Thunk(fun () -> raise (Report.make e)))
 
   let orRaiseWith f eff : Eff<_, unit, _> =
     eff |> orElseWith (fun e -> Eff.Thunk(fun () -> raise (f e)))
@@ -225,22 +221,35 @@ module Eff =
   let forkOn (eff: Eff<'t, 'e, 'env>) : Eff<Fiber<'t, 'e>, 'e, 'env> =
     Eff.Node(EffNodes.Fork(eff, true))
 
-  let race (left: Eff<'t, 'e, 'env>) (right: Eff<'t, 'e, 'env>) : Eff<'t, 'e, 'env> =
+  let race
+    (left: Eff<'t, 'e, 'env>)
+    (right: Eff<'t, 'e, 'env>)
+    : Eff<'t, 'e, 'env> =
     Eff.Node(EffNodes.Race(left, right))
 
   let all (effects: Eff<'t, 'e, 'env> list) : Eff<'t list, 'e, 'env> =
     Eff.Node(EffNodes.All(effects))
 
-  let timeout (duration: TimeSpan) (eff: Eff<'t, 'e, 'env>) : Eff<TimeoutResult<'t>, 'e, 'env> =
+  let timeout
+    (duration: TimeSpan)
+    (eff: Eff<'t, 'e, 'env>)
+    : Eff<TimeoutResult<'t>, 'e, 'env> =
     Eff.Node(EffNodes.Timeout(duration, eff))
 
   let runTask (env: 'env) (eff: Eff<'t, 'e, 'env>) : Task<Exit<'t, 'e>> =
-    let rootFiber = EffRuntime.FiberHandle(None, new System.Threading.CancellationTokenSource())
+    let rootFiber =
+      EffRuntime.FiberHandle(
+        None,
+        new System.Threading.CancellationTokenSource()
+      )
+
     let stepper =
       EffRuntime.RuntimeStepper<'env>(env, rootFiber.Token, rootFiber, false)
       :> EffRuntime.Stepper<'env>
+
     let machine =
-      EffRuntime.TypedMachine<'env>(stepper, stepper.Step eff []) :> EffRuntime.Machine
+      EffRuntime.TypedMachine<'env>(stepper, stepper.Step eff [])
+      :> EffRuntime.Machine
 
     task {
       let! exit = EffRuntime.runFiberTask rootFiber machine
