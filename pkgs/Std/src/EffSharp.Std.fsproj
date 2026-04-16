@@ -23,6 +23,7 @@
     <Compile Include="Clock.fs" />
     <Compile Include="Env.fs" />
     <Compile Include="Random.fs" />
+    <Compile Include="Net.fs" />
   </ItemGroup>
 
   <ItemGroup>
