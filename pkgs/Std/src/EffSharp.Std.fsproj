@@ -24,6 +24,8 @@
     <Compile Include="Env.fs" />
     <Compile Include="Random.fs" />
     <Compile Include="Net.fs" />
+    <Compile Include="Command.fs" />
+    <Compile Include="Cmd.fs" />
   </ItemGroup>
 
   <ItemGroup>
