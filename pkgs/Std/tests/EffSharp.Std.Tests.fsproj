@@ -9,6 +9,7 @@
     <Compile Include="Stdio.fs" />
     <Compile Include="String.fs" />
     <Compile Include="Path.fs" />
+    <Compile Include="Cmd.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

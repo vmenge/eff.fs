@@ -8,4 +8,4 @@ module Program =
     runTestsWithCLIArgs
       []
       argv
-      (testList "all" [ Stdio.tests; Path.tests; String.tests ])
+      (testList "all" [ Stdio.tests; Path.tests; String.tests; Cmd.tests ])

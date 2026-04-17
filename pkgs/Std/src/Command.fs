@@ -43,8 +43,9 @@ type ProcessStdio =
   | Piped
   | Null
   | FromChild of Child
+  | FromCmd of upstream: Cmd
 
-type Cmd = {
+and Cmd = {
   Program: string
   Args: string list
   EnvVars: (string * string) list
@@ -165,6 +166,7 @@ type CommandProvider internal () =
       match cmd.Stdin with
       | Piped
       | FromChild _
+      | FromCmd _
       | Null -> true
       | Inherit -> false
 
@@ -173,21 +175,23 @@ type CommandProvider internal () =
       | Piped
       | Null -> true
       | Inherit -> false
-      | FromChild _ -> false
+      | FromChild _
+      | FromCmd _ -> false
 
     si.RedirectStandardError <-
       match cmd.Stderr with
       | Piped
       | Null -> true
       | Inherit -> false
-      | FromChild _ -> false
+      | FromChild _
+      | FromCmd _ -> false
 
     si
 
   let drainToNull (stream: System.IO.Stream) =
     stream.CopyToAsync System.IO.Stream.Null |> ignore
 
-  let startAndConfigure (cmd: Cmd) =
+  let rec startAndConfigure (cmd: Cmd) : Process =
     let proc = new Process(StartInfo = toStartInfo cmd)
 
     if not (proc.Start()) then
@@ -211,6 +215,12 @@ type CommandProvider internal () =
           .ContinueWith(fun _ -> proc.StandardInput.Close())
         |> ignore
       | None -> proc.StandardInput.Close()
+    | FromCmd sourceCmd ->
+      let sourceProc = startAndConfigure sourceCmd
+      sourceProc.StandardOutput.BaseStream
+        .CopyToAsync(proc.StandardInput.BaseStream)
+        .ContinueWith(fun _ -> proc.StandardInput.Close())
+      |> ignore
     | _ -> ()
 
     proc
