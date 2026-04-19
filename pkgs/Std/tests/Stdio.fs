@@ -6,6 +6,7 @@ open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Expecto
+open EffSharp.Core
 open EffSharp.Std
 
 module Stdio =
@@ -85,6 +86,11 @@ module Stdio =
     StdioProvider(stdin, stdout, stderr, Encoding.UTF8, Encoding.UTF8, "\n")
     :> EffSharp.Std.Stdio
 
+  let private run eff = task {
+    let! exit = Eff.runTask () eff
+    return Exit.ok exit
+  }
+
   let tests =
     testList "Stdio" [
       testCase
@@ -104,7 +110,7 @@ module Stdio =
         use stderr = new ProbeStream([||])
         let stdio = create stdin stdout stderr
 
-        do! stdio.eflush ()
+        do! stdio.eflush () |> run
 
         Expect.equal stdout.FlushCount 0 "stdout should not be flushed"
         Expect.equal stderr.FlushCount 1 "stderr should be flushed"
@@ -119,9 +125,9 @@ module Stdio =
         do!
           Task.WhenAll(
             [|
-              stdio.print "A" :> Task
-              stdio.write [| byte 'B' |] :> Task
-              stdio.println "C" :> Task
+              run (stdio.print "A") :> Task
+              run (stdio.write [| byte 'B' |]) :> Task
+              run (stdio.println "C") :> Task
             |]
           )
 
@@ -137,9 +143,9 @@ module Stdio =
         do!
           Task.WhenAll(
             [|
-              stdio.eprint "A" :> Task
-              stdio.ewrite [| byte 'B' |] :> Task
-              stdio.eprintln "C" :> Task
+              run (stdio.eprint "A") :> Task
+              run (stdio.ewrite [| byte 'B' |]) :> Task
+              run (stdio.eprintln "C") :> Task
             |]
           )
 
@@ -152,9 +158,9 @@ module Stdio =
         use stderr = new ProbeStream([||])
         let stdio = create stdin stdout stderr
 
-        let! first = stdio.read 2
-        let! line = stdio.readln ()
-        let! rest = stdio.read 3
+        let! first = stdio.read 2 |> run
+        let! line = stdio.readln () |> run
+        let! rest = stdio.read 3 |> run
 
         Expect.equal
           (decodeUtf8 first)
@@ -178,8 +184,8 @@ module Stdio =
         use stderr = new ProbeStream([||])
         let stdio = create stdin stdout stderr
 
-        let! line = stdio.readln ()
-        let! rest = stdio.read 3
+        let! line = stdio.readln () |> run
+        let! rest = stdio.read 3 |> run
 
         Expect.equal line (Some "abc") "readln should read the line"
 
@@ -195,8 +201,8 @@ module Stdio =
         use stderr = new ProbeStream([||])
         let stdio = create stdin stdout stderr
 
-        let! line = stdio.readln ()
-        let! rest = stdio.read 3
+        let! line = stdio.readln () |> run
+        let! rest = stdio.read 3 |> run
 
         Expect.equal line (Some "abc") "CRLF should terminate the line"
         Expect.equal (decodeUtf8 rest) "def" "cursor should advance past CRLF"

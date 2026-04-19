@@ -17,3 +17,5 @@ tests/milestone/out/
 .tmp/
 .tmp-runtime/
 target/
+
+.codex

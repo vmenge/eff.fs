@@ -1,5 +1,6 @@
 namespace EffSharp.Std
 
+open EffSharp.Core
 open EffSharp.Gen
 open System
 open System.Buffers
@@ -10,21 +11,21 @@ open System.Threading.Tasks
 
 [<Effect(Mode.Wrap)>]
 type Stdio =
-  abstract print: string -> unit Task
-  abstract println: string -> unit Task
-  abstract eprint: string -> unit Task
-  abstract eprintln: string -> unit Task
+  abstract print: string -> Eff<unit, 'e, 'env>
+  abstract println: string -> Eff<unit, 'e, 'env>
+  abstract eprint: string -> Eff<unit, 'e, 'env>
+  abstract eprintln: string -> Eff<unit, 'e, 'env>
 
-  abstract readln: unit -> (string option) Task
-  abstract read: int -> (byte array) Task
-  abstract readToString: unit -> string Task
-  abstract readToEnd: unit -> (byte array) Task
+  abstract readln: unit -> Eff<string option, 'e, 'env>
+  abstract read: int -> Eff<byte array, 'e, 'env>
+  abstract readToString: unit -> Eff<string, 'e, 'env>
+  abstract readToEnd: unit -> Eff<byte array, 'e, 'env>
 
-  abstract write: byte array -> unit Task
-  abstract ewrite: byte array -> unit Task
+  abstract write: byte array -> Eff<unit, 'e, 'env>
+  abstract ewrite: byte array -> Eff<unit, 'e, 'env>
 
-  abstract flush: unit -> unit Task
-  abstract eflush: unit -> unit Task
+  abstract flush: unit -> Eff<unit, 'e, 'env>
+  abstract eflush: unit -> Eff<unit, 'e, 'env>
 
   abstract isTerminal: unit -> bool
   abstract isOutTerminal: unit -> bool
@@ -306,40 +307,59 @@ type StdioProvider
 
   interface Stdio with
     member _.eprint(arg1: string) =
-      withGate stderrGate (fun () -> writeTextCore stderr arg1)
+      fun () -> withGate stderrGate (fun () -> writeTextCore stderr arg1)
+      |> Eff.ofTask
 
     member _.eprintln(arg1: string) =
-      withGate stderrGate (fun () -> writeLineCore stderr arg1)
+      fun () -> withGate stderrGate (fun () -> writeLineCore stderr arg1)
+      |> Eff.ofTask
 
     member _.print(arg1: string) =
-      withGate stdoutGate (fun () -> writeTextCore stdout arg1)
+      fun () -> withGate stdoutGate (fun () -> writeTextCore stdout arg1)
+      |> Eff.ofTask
 
     member _.println(arg1: string) =
-      withGate stdoutGate (fun () -> writeLineCore stdout arg1)
+      fun () -> withGate stdoutGate (fun () -> writeLineCore stdout arg1)
+      |> Eff.ofTask
 
-    member _.readln() = withGate stdinGate readlnCore
+    member _.readln() =
+      fun () -> withGate stdinGate readlnCore
+      |> Eff.ofTask
 
-    member _.read n = withGate stdinGate (fun () -> readCore n)
+    member _.read n =
+      fun () -> withGate stdinGate (fun () -> readCore n)
+      |> Eff.ofTask
 
-    member _.readToString() = withGate stdinGate readToStringCore
+    member _.readToString() =
+      fun () -> withGate stdinGate readToStringCore
+      |> Eff.ofTask
 
-    member _.readToEnd() = withGate stdinGate readToEndCore
+    member _.readToEnd() =
+      fun () -> withGate stdinGate readToEndCore
+      |> Eff.ofTask
 
     member _.write bytes =
-      withGate
-        stdoutGate
-        (fun () -> task { do! stdout.WriteAsync(bytes, 0, bytes.Length) })
+      Eff.ofTask
+      <| fun () ->
+        withGate
+          stdoutGate
+          (fun () -> task { do! stdout.WriteAsync(bytes, 0, bytes.Length) })
+
 
     member _.ewrite bytes =
-      withGate
-        stderrGate
-        (fun () -> task { do! stderr.WriteAsync(bytes, 0, bytes.Length) })
+      Eff.ofTask
+      <| fun () ->
+        withGate
+          stderrGate
+          (fun () -> task { do! stderr.WriteAsync(bytes, 0, bytes.Length) })
 
     member _.flush() =
-      withGate stdoutGate (fun () -> task { do! stdout.FlushAsync() })
+      fun () -> withGate stdoutGate (fun () -> task { do! stdout.FlushAsync() })
+      |> Eff.ofTask
 
     member _.eflush() =
-      withGate stderrGate (fun () -> task { do! stderr.FlushAsync() })
+      fun () -> withGate stderrGate (fun () -> task { do! stderr.FlushAsync() })
+      |> Eff.ofTask
 
     member _.isTerminal() = not Console.IsInputRedirected
 

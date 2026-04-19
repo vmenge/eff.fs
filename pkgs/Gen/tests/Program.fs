@@ -19,6 +19,7 @@ let main argv =
           SupportedAsyncE2E.tests
           QualifiedReturnTypesE2E.tests
           SupportedEffExactE2E.tests
+          SupportedGenericEnvWrapE2E.tests
           SupportedEffProvideFromE2E.tests
           DiagnosticsE2E.tests
           PackagedConsumerE2E.tests

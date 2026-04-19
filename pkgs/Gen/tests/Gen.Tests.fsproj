@@ -17,6 +17,7 @@
     <Compile Include="SupportedAsyncE2E.fs" />
     <Compile Include="QualifiedReturnTypesE2E.fs" />
     <Compile Include="SupportedEffExactE2E.fs" />
+    <Compile Include="SupportedGenericEnvWrapE2E.fs" />
     <Compile Include="SupportedEffProvideFromE2E.fs" />
     <Compile Include="DiagnosticsE2E.fs" />
     <Compile Include="PackagedConsumerE2E.fs" />

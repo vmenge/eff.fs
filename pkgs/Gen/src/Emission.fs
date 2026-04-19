@@ -1,9 +1,20 @@
 namespace EffSharp.Gen
 
+open System
 open System.Text
 
 module Emission =
   let private appendLine (builder: StringBuilder) (line: string) = builder.AppendLine(line) |> ignore
+
+  let private normalizeEnvironmentType (environmentType: string) =
+    if environmentType.StartsWith("#", StringComparison.Ordinal) then
+      environmentType.Substring(1)
+    else
+      environmentType
+
+  let private isTypeVariableEnvironment (environmentType: string) =
+    normalizeEnvironmentType environmentType
+    |> fun normalized -> normalized.StartsWith("'", StringComparison.Ordinal)
 
   let private emitWrappedContract builder effectInterface =
     let effectNamespace =
@@ -101,20 +112,20 @@ module Emission =
         appendLine builder "      |> Eff.bind (fun valueTaskValue -> Eff.ofValueTask (fun () -> valueTaskValue))"
         appendLine builder "      |> Eff.bind Eff.ofResult"
     | ReturnShape.Eff(_, _, environmentType) ->
-        if environmentType = "unit" then
+        let normalizedEnvironment = normalizeEnvironmentType environmentType
+
+        if normalizedEnvironment = "unit" then
           appendLine builder "      |> Eff.map (Eff.provideFrom (fun _ -> ()))"
           appendLine builder "      |> Eff.flatten"
-        elif environmentType = effectInterface.EnvironmentName
-             || environmentType = $"#{effectInterface.EnvironmentName}"
-             || environmentType = effectInterface.ServiceName
-             || environmentType = $"#{effectInterface.ServiceName}"
-             || environmentType = effectInterface.ServiceTypeName
-             || environmentType = $"#{effectInterface.ServiceTypeName}" then
+        elif isTypeVariableEnvironment environmentType
+             || normalizedEnvironment = effectInterface.EnvironmentName
+             || normalizedEnvironment = effectInterface.ServiceName
+             || normalizedEnvironment = effectInterface.ServiceTypeName then
           appendLine builder "      |> Eff.flatten"
-        elif effectInterface.InheritedEnvironments |> List.contains environmentType then
+        elif effectInterface.InheritedEnvironments |> List.contains normalizedEnvironment then
           appendLine
             builder
-            $"      |> Eff.map (Eff.provideFrom (fun (outer: #{effectInterface.EnvironmentName}) -> outer :> {environmentType}))"
+            $"      |> Eff.map (Eff.provideFrom (fun (outer: #{effectInterface.EnvironmentName}) -> outer :> {normalizedEnvironment}))"
 
           appendLine builder "      |> Eff.flatten"
         else

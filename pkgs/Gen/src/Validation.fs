@@ -32,6 +32,10 @@ module Validation =
     else
       environmentType
 
+  let private isTypeVariableEnvironment (environmentType: string) =
+    normalizeEnvironmentType environmentType
+    |> fun normalized -> normalized.StartsWith("'", StringComparison.Ordinal)
+
   let private matchesTypeName (candidate: string) (typeName: string) =
     typeName = candidate || typeName.EndsWith($".{candidate}", StringComparison.Ordinal)
 
@@ -41,7 +45,8 @@ module Validation =
   let private matchesOwnEnvironment effectInterface environmentType =
     let normalizedEnvironment = normalizeEnvironmentType environmentType
 
-    equivalentTypeName effectInterface.EnvironmentName normalizedEnvironment
+    isTypeVariableEnvironment environmentType
+    || equivalentTypeName effectInterface.EnvironmentName normalizedEnvironment
     || equivalentTypeName effectInterface.ServiceName normalizedEnvironment
     || equivalentTypeName effectInterface.ServiceTypeName normalizedEnvironment
 

@@ -236,7 +236,8 @@ module Discovery =
                   |> List.choose (fun methodModel ->
                     match methodModel.ReturnShape with
                     | ReturnShape.Eff(_, _, environmentType)
-                      when environmentType <> "unit"
+                      when not (environmentType.StartsWith("'", StringComparison.Ordinal))
+                           && environmentType <> "unit"
                            && environmentType <> Naming.environmentName mode serviceName
                            && environmentType <> $"#{Naming.environmentName mode serviceName}"
                            && environmentType <> serviceName
